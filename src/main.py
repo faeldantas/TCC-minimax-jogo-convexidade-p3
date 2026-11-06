@@ -1,8 +1,11 @@
 """
-Aplicação Principal -- Versão CORE Essencial.
+Ponto de Entrada (Versão CORE).
+Testa caterpillars uniformes no formato canônico L = (0, 2..2, 0),
+expandindo iterativamente a espinha com suas 2 pernas por nó interno.
 
-Closed Hull Game (CHG) na Convexidade P_3 em Grafos Caterpillar.
-Utiliza exclusivamente o Algoritmo Minimax Puro (sem poda Alfa-Beta).
+Executa o algoritmo Minimax Puro (sem poda Alfa-Beta) e exibe de forma
+concisa: tamanho da espinha, quem vence, número de jogadas e poucas informações.
+Interrompa a qualquer momento com [Ctrl + C].
 """
 
 from __future__ import annotations
@@ -14,76 +17,118 @@ import sys
 # Garante importação do pacote p3game
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from p3game import Caterpillar, JogoFechoConvexoP3, Minimax, MAX, resolver_caterpillar
+from p3game import Caterpillar, JogoFechoConvexoP3, Minimax, MAX
 
 
-def executar_partida_exemplo(assinatura: tuple[int, ...], nome: str = "") -> None:
-    """Executa o solucionador Minimax Puro para um grafo caterpillar e exibe a análise essencial."""
-    cat = Caterpillar(assinatura)
+def assinatura_uniforme_2pernas(m: int) -> tuple[int, ...]:
+    """Retorna a assinatura canônica uniforme (0, 2, ..., 2, 0) com m nós internos."""
+    return (0,) + (2,) * m + (0,)
+
+
+def formatar_cabecalho() -> str:
+    cab = (
+        f"{'m':>2} | {'k':>2} | {'n':>3} | "
+        f"{'Vencedor':^8} | {'Jogadas':^7} | {'Alice':^5} | {'Bob':^5} | "
+        f"{'Propagados':^10} | {'Tempo':^11} | {'Nós Minimax':^11}"
+    )
+    div = "-" * len(cab)
+    return f"{div}\n{cab}\n{div}"
+
+
+def formatar_linha(m: int, k: int, n: int, v: int, turnos: int, ja: int, jb: int, prop: int, tempo_s: float, nos: int) -> str:
+    venc_str = "Alice" if v == MAX else "Bob"
+    if tempo_s < 1.0:
+        t_str = f"{tempo_s * 1000:7.2f} ms"
+    else:
+        t_str = f"{tempo_s:7.2f} s "
+
+    return (
+        f"{m:2d} | {k:2d} | {n:3d} | "
+        f"{venc_str:^8} | {turnos:7d} | {ja:5d} | {jb:5d} | "
+        f"{prop:10d} | {t_str:^11} | {nos:11d}"
+    )
+
+
+def resolver_passo(m: int) -> dict:
+    L = assinatura_uniforme_2pernas(m)
+    cat = Caterpillar(L)
     jogo = JogoFechoConvexoP3(cat.adj, cat.rotulos)
     solver = Minimax(jogo, memoizacao=True)
 
     v = solver.resolver()
-    venc = "Alice (+1)" if v == MAX else "Bob (-1)"
     pv = solver.variacao_principal()
-    vencedoras_alice = [cat.rotulos[j] for j in solver.jogadas_vencedoras()] if v == MAX else []
+    ja = sum(1 for p in pv if p["jogador"] == "Alice")
+    jb = sum(1 for p in pv if p["jogador"] == "Bob")
+    prop = cat.n - len(pv)
 
-    titulo = f"{nome} -- Assinatura L = {assinatura}" if nome else f"Assinatura L = {assinatura}"
-    print("=" * 75)
-    print(titulo)
-    print("=" * 75)
-    print(f"Vértices totais: n = {cat.n} (Espinha: k = {cat.k}, Folhas: {len(cat.folhas)})")
-    print(f"Resultado do Minimax Puro: {venc}")
-    if vencedoras_alice:
-        print(f"Lances ótimos de Alice no 1º turno: {', '.join(vencedoras_alice)}")
-    else:
-        print("Lances ótimos de Alice no 1º turno: Nenhum (Bob força a vitória)")
-
-    print(f"\nPartida sob Jogo Ótimo ({len(pv)} turnos):")
-    for passo in pv:
-        jog = passo["jogador"]
-        lance = passo["jogada"]
-        props = passo["propagados"]
-        prop_str = f" [propagou por P3: {', '.join(props)}]" if props else ""
-        print(f"  Turno {passo['turno']:2d} | {jog:<5}: jogou {lance}{prop_str}")
-
-    stats = solver.stats
-    print(f"\nEstatísticas da Busca Minimax:")
-    print(f"  - Nós visitados: {stats.nos_visitados}")
-    print(f"  - Estados em memória: {stats.entradas_tabela} (acertos: {stats.acertos_tabela})")
-    print(f"  - Tempo de execução: {stats.tempo_s * 1000:.2f} ms")
-    print()
+    return {
+        "m": m,
+        "k": cat.k,
+        "n": cat.n,
+        "v": v,
+        "turnos": len(pv),
+        "ja": ja,
+        "jb": jb,
+        "prop": prop,
+        "tempo_s": solver.stats.tempo_s,
+        "nos": solver.stats.nos_visitados,
+        "trilha": pv,
+    }
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description="CORE: Jogo da Convexidade P_3 em Caterpillars com Minimax Puro."
+        description="Expansão da espinha para caterpillars uniformes (0, 2..2, 0) com Minimax Puro."
     )
     parser.add_argument(
-        "--assinatura",
-        type=str,
-        default=None,
-        help="Assinatura canônica arbitrária (ex: '0,0,0' ou '0,2,0,1,1,0').",
+        "--m-min",
+        type=int,
+        default=1,
+        help="Tamanho inicial da espinha interna m (padrão: 1).",
+    )
+    parser.add_argument(
+        "--m-max",
+        type=int,
+        default=100,
+        help="Limite máximo de espinha interna m (padrão: 100).",
+    )
+    parser.add_argument(
+        "--trilha",
+        action="store_true",
+        help="Exibe os lances da partida ótima sob cada tamanho testado.",
     )
     args = parser.parse_args()
 
-    print("\n" + "#" * 75)
-    print("# VERSÃO CORE: JOGO DA CONVEXIDADE P_3 E MINIMAX PURO (SEM ALFA-BETA)")
-    print("#" * 75 + "\n")
+    print("=" * 87)
+    print("CATERPILLARS UNIFORMES L = (0, 2..2, 0) -- MINIMAX PURO (CORE)")
+    print("=" * 87)
+    print("Formato: 2 pernas em cada nó interno da espinha | Alice sempre inicia (MAX)")
+    print("Pressione [Ctrl + C] para interromper a execução a qualquer momento.")
+    print("=" * 87)
+    print(formatar_cabecalho(), flush=True)
 
-    if args.assinatura:
-        L = tuple(int(x.strip()) for x in args.assinatura.split(","))
-        executar_partida_exemplo(L, "Instância Customizada")
-    else:
-        # Casos clássicos e estudo de caso do TCC
-        exemplos = [
-            ((0, 0, 0), "Caminho P_3"),
-            ((0, 2, 0), "Estrela K_{1,4}"),
-            ((0, 1, 1, 0), "Caterpillar Uniforme C(2,1)"),
-            ((0, 2, 0, 1, 1, 0), "Grafo Estudo de Caso do TCC"),
-        ]
-        for L, nome in exemplos:
-            executar_partida_exemplo(L, nome)
+    m = args.m_min
+    try:
+        for m in range(args.m_min, args.m_max + 1):
+            r = resolver_passo(m)
+            linha = formatar_linha(
+                r["m"], r["k"], r["n"], r["v"],
+                r["turnos"], r["ja"], r["jb"],
+                r["prop"], r["tempo_s"], r["nos"]
+            )
+            print(linha, flush=True)
+
+            if args.trilha:
+                seq = " -> ".join(
+                    f"{p['jogador'][0]}({p['jogada']})" + (f"+{p['propagados']}" if p["propagados"] else "")
+                    for p in r["trilha"]
+                )
+                print(f"   Trilha: {seq}", flush=True)
+
+    except KeyboardInterrupt:
+        print("\n" + "-" * 87)
+        print(f"[PARADA] Execução interrompida pelo usuário no tamanho m = {m}.")
+        print("-" * 87)
 
 
 if __name__ == "__main__":
