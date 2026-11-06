@@ -261,7 +261,7 @@ def analisar_uniforme_expansao(m: int, p: int, id_inst: int = 1) -> dict:
         "k_espinha": cat.k,
         "n_vertices": cat.n,
         "folhas_totais": folhas_totais,
-        "paridade_folhas": "Par" if folhas_totais % 2 == 0 else "Ímpar",
+        "paridade_folhas": "Par" if folhas_totais % 2 == 0 else "Impar",
         "assinatura": str(list(L)),
         "solucao_otima_encontrada": True,
         "utilidade": v,
