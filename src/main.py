@@ -1,13 +1,12 @@
 """
 Ponto de entrada principal (CLI) do pacote `p3game`.
 
-Executa a análise interativa e iterativa para caterpillars cheios com
-duas pernas em todos os nós da espinha, expandindo o tamanho da espinha
-em loop (limite máximo padrão: m <= 100).
-
-O usuário decide quando parar a execução pressionando [Ctrl + C] a qualquer momento.
-Ao interromper, o script resume todos os tamanhos testados e salva automaticamente
-os dados gerados em arquivos CSV e JSON.
+Funcionalidades:
+1. Experimento Iterativo: Executa a análise para caterpillars cheios com 2 pernas
+   por nó da espinha (L=(2,)*m), expandindo m até 100, com interrupção por Ctrl+C.
+2. Visualização Gráfica (--visualizar): Permite ver graficamente a partida e as
+   propagações P_3 em painéis PNG de alta resolução, visualizador interativo em
+   janela Matplotlib com sliders/botões, e aplicação web autônoma HTML5/SVG.
 """
 
 from __future__ import annotations
@@ -15,15 +14,22 @@ from __future__ import annotations
 import argparse
 import os
 import sys
-import time
+import webbrowser
 
 # Garante importação do pacote p3game
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+from p3game import Caterpillar, resolver_caterpillar
 from p3game.minimax import LimiteDeNosExcedido
 from p3game.experimentos import (
     analisar_caterpillar_cheio_2_pernas,
     salvar_resultados_caterpillar_cheio,
+    assinatura_caterpillar_cheio,
+)
+from p3game.visualizacao import (
+    gerar_painel_estatico,
+    abrir_visualizador_interativo,
+    gerar_html_interativo,
 )
 
 
@@ -46,7 +52,6 @@ def formatar_linha_tabela(r: dict) -> str:
         else "--- (Bob vence forçado)"
     )
 
-    # Formata tempo de forma amigável (ms se < 1000, ou s se >= 1000)
     if r["tempo_ms"] < 1000.0:
         tempo_str = f"{r['tempo_ms']:7.2f} ms"
     else:
@@ -104,21 +109,103 @@ def imprimir_sintese_final(registros: list[dict], interrompido: bool = False) ->
     print("=" * 95)
 
 
+def executar_modo_visualizacao(args) -> None:
+    """Executa a visualização gráfica (PNG, Janela Matplotlib e HTML Interativo)."""
+    raiz = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    pasta_vis = os.path.join(raiz, "resultados", "visualizacao")
+    os.makedirs(pasta_vis, exist_ok=True)
+
+    if args.assinatura:
+        L = tuple(int(x.strip()) for x in args.assinatura.split(","))
+        nome_inst = f"caterpillar_L_{'_'.join(str(x) for x in L)}"
+        titulo_vis = f"Caterpillar com Assinatura L = {L}"
+    else:
+        m = args.m_visualizar
+        L = assinatura_caterpillar_cheio(m, modo=args.modo)
+        nome_inst = f"caterpillar_cheio_m{m}_{args.modo}"
+        titulo_vis = f"Caterpillar Cheio (m={m}, L={L})"
+
+    cat = Caterpillar(L)
+    print("=" * 95)
+    print("VISUALIZAÇÃO GRÁFICA DO JOGO DA CONVEXIDADE P_3")
+    print("=" * 95)
+    print(f"Grafo selecionado: {titulo_vis}")
+    print(f"Vértices totais: n = {cat.n} | Espinha: k = {cat.k} | Folhas: {len(cat.folhas)}")
+    print("Resolvendo jogo ótimo com Minimax...")
+
+    v, solver = resolver_caterpillar(L, corte=True, memoizacao=True, simetria=True)
+    pv = solver.variacao_principal()
+
+    venc = "Alice (+1)" if v == 1 else "Bob (-1)"
+    print(f"Resultado: Vencedor = {venc} em {len(pv)} turnos (Propagados: {cat.n - len(pv)})")
+
+    # 1. Gera Imagem PNG Estática com a Grade de Todos os Turnos
+    caminho_png = os.path.join(pasta_vis, f"{nome_inst}.png")
+    gerar_painel_estatico(cat, pv, caminho_png)
+    print(f"[Painel PNG Gerado]: {caminho_png}")
+
+    # 2. Gera Aplicação Web HTML5/SVG Interativa
+    caminho_html = os.path.join(pasta_vis, f"{nome_inst}.html")
+    gerar_html_interativo(cat, pv, caminho_html, titulo=titulo_vis)
+    print(f"[Visualizador HTML Interativo Gerado]: {caminho_html}")
+
+    # 3. Abre no Navegador se solicitado
+    if args.navegador:
+        print("Abrindo visualizador interativo no navegador padrão...")
+        webbrowser.open(f"file://{os.path.abspath(caminho_html)}")
+
+    # 4. Abre Janela Interativa Matplotlib se solicitado
+    if args.janela:
+        print("Abrindo janela interativa Matplotlib com controles de turno...")
+        abrir_visualizador_interativo(cat, pv)
+
+
 def main():
     parser = argparse.ArgumentParser(
-        description="Experimento Minimax Iterativo: Caterpillar cheio com 2 pernas em todos os nós da espinha (m <= 100)."
+        description="P3-Game: Experimento de Caterpillars Cheios e Visualização Gráfica das Propagações."
     )
+
+    # Modo de Execução
+    parser.add_argument(
+        "--visualizar", "--vis",
+        action="store_true",
+        help="Ativa o modo de visualização gráfica para um grafo específico.",
+    )
+    parser.add_argument(
+        "--m-visualizar", "--m",
+        type=int,
+        default=4,
+        help="Tamanho da espinha para visualização gráfica (padrão: 4).",
+    )
+    parser.add_argument(
+        "--assinatura",
+        type=str,
+        default=None,
+        help="Assinatura arbitrária para visualizar (ex: '0,2,0,1,1,0' ou '2,2,2,2').",
+    )
+    parser.add_argument(
+        "--janela",
+        action="store_true",
+        help="Abre a janela gráfica interativa do Matplotlib com sliders/botões.",
+    )
+    parser.add_argument(
+        "--navegador",
+        action="store_true",
+        help="Abre a aplicação HTML5 interativa diretamente no seu navegador padrão.",
+    )
+
+    # Parâmetros do Loop de Expansão (m <= 100)
     parser.add_argument(
         "--m-min",
         type=int,
         default=1,
-        help="Tamanho inicial da espinha m (padrão: 1)",
+        help="Tamanho inicial da espinha m (padrão: 1).",
     )
     parser.add_argument(
         "--m-max",
         type=int,
         default=100,
-        help="Tamanho limite máximo da espinha m (padrão: 100)",
+        help="Tamanho limite máximo da espinha m (padrão: 100).",
     )
     parser.add_argument(
         "--modo",
@@ -126,7 +213,7 @@ def main():
         choices=["todos", "diametral"],
         default="todos",
         help=(
-            "Modo de fixação das pernas na espinha: "
+            "Modo de fixação das pernas: "
             "'todos' = exatamente 2 pernas em cada nó da espinha (L=(2,)*m, n=3*m); "
             "'diametral' = espinha diametral canônica com m nós internos (L=(0,)+(2,)*m+(0,), n=3*m+2). "
             "Padrão: 'todos'"
@@ -136,12 +223,17 @@ def main():
         "--limite-nos",
         type=int,
         default=None,
-        help="Limite opcional de nós Minimax por instância para evitar esperas excessivas em m elevado (ex: 2000000).",
+        help="Limite opcional de nós Minimax por instância para evitar esperas excessivas em m elevado.",
     )
     parser.add_argument(
         "--detalhes",
         action="store_true",
         help="Exibe a trilha ótima passo a passo (variação principal) de cada instância iterativamente.",
+    )
+    parser.add_argument(
+        "--gerar-vis",
+        action="store_true",
+        help="Durante o loop, gera automaticamente PNG e HTML de cada instância testada.",
     )
     parser.add_argument(
         "--sem-salvar",
@@ -151,6 +243,12 @@ def main():
 
     args = parser.parse_args()
 
+    # Se a flag --visualizar ou --janela ou --navegador foi passada, executa a visualização
+    if args.visualizar or args.janela or args.navegador or args.assinatura:
+        executar_modo_visualizacao(args)
+        return
+
+    # Caso contrário, executa o loop iterativo com expansão da espinha até m <= 100
     desc_modo = (
         f"Todos os nós da espinha têm 2 pernas (n = 3*m, L = (2,)*m)"
         if args.modo == "todos"
@@ -171,6 +269,9 @@ def main():
     interrompido = False
     m_atual = args.m_min
 
+    raiz = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    pasta_vis = os.path.join(raiz, "resultados", "visualizacao")
+
     try:
         for m in range(args.m_min, args.m_max + 1):
             m_atual = m
@@ -187,6 +288,11 @@ def main():
                 if args.detalhes:
                     imprimir_detalhe_instancia(reg)
                     sys.stdout.flush()
+
+                if args.gerar_vis:
+                    cat = Caterpillar(assinatura_caterpillar_cheio(m, modo=args.modo))
+                    gerar_painel_estatico(cat, reg["variacao_principal"], os.path.join(pasta_vis, f"caterpillar_m{m}.png"))
+                    gerar_html_interativo(cat, reg["variacao_principal"], os.path.join(pasta_vis, f"caterpillar_m{m}.html"))
 
             except LimiteDeNosExcedido as err:
                 print(f"{m:3d} | LIMITE DE NÓS EXCEDIDO ({err}). Avançando...", flush=True)

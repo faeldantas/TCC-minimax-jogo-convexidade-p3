@@ -32,4 +32,12 @@ from .experimentos import (
     analisar_caterpillar_cheio_2_pernas,
     salvar_resultados_caterpillar_cheio,
 )
+from .visualizacao import (
+    calcular_layout_caterpillar,
+    reconstruir_historico_partida,
+    desenhar_grafo_turno,
+    gerar_painel_estatico,
+    abrir_visualizador_interativo,
+    gerar_html_interativo,
+)
 

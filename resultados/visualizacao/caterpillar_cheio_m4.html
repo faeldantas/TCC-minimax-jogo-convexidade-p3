@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Caterpillar Cheio m=4 (L=(2,2,2,2))</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card-bg: #1e293b;
+      --border: #334155;
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+      --alice: #ef4444;
+      --bob: #0ea5e9;
+      --prop: #f59e0b;
+      --livre: #475569;
+      --livre-fill: #1e293b;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 24px 16px;
+      min-height: 100vh;
+    }
+    .container {
+      max-width: 1000px;
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+    header {
+      background: var(--card-bg);
+      padding: 20px 24px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+    h1 { font-size: 1.25rem; font-weight: 700; color: #fff; }
+    .badge {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 9999px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      background: #334155;
+    }
+    .stage {
+      background: var(--card-bg);
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      position: relative;
+    }
+    svg {
+      width: 100%;
+      height: 400px;
+      background: #0f172a;
+      border-radius: 8px;
+      border: 1px solid #1e293b;
+    }
+    .edge { stroke: #334155; stroke-width: 2.5; transition: stroke 0.3s; }
+    .edge.active { stroke: #f8fafc; stroke-width: 3.5; }
+    .node-circle {
+      cursor: pointer;
+      transition: fill 0.3s, stroke 0.3s, r 0.2s;
+    }
+    .node-text {
+      font-size: 11px;
+      font-weight: bold;
+      text-anchor: middle;
+      dominant-baseline: central;
+      pointer-events: none;
+      user-select: none;
+    }
+    .controls {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 14px;
+      margin-top: 16px;
+      width: 100%;
+      flex-wrap: wrap;
+    }
+    button {
+      background: #334155;
+      color: #fff;
+      border: 1px solid var(--border);
+      padding: 8px 16px;
+      border-radius: 8px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    button:hover:not(:disabled) { background: #475569; }
+    button:disabled { opacity: 0.4; cursor: not-allowed; }
+    .btn-play { background: #2563eb; border-color: #3b82f6; }
+    .btn-play:hover { background: #1d4ed8; }
+    .slider-wrap {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex: 1;
+      min-width: 200px;
+      max-width: 400px;
+    }
+    input[type=range] {
+      flex: 1;
+      height: 6px;
+      background: #334155;
+      border-radius: 3px;
+      outline: none;
+      cursor: pointer;
+    }
+    .info-card {
+      background: var(--card-bg);
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      padding: 20px;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+    }
+    .info-item h3 { font-size: 0.8rem; text-transform: uppercase; color: var(--text-muted); margin-bottom: 4px; }
+    .info-item p { font-size: 1.1rem; font-weight: 700; }
+    .legend {
+      display: flex;
+      justify-content: center;
+      gap: 20px;
+      margin-top: 12px;
+      flex-wrap: wrap;
+      font-size: 0.85rem;
+    }
+    .legend-item { display: flex; align-items: center; gap: 6px; }
+    .legend-box { width: 14px; height: 14px; border-radius: 50%; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div>
+        <h1>Caterpillar Cheio m=4 (L=(2,2,2,2))</h1>
+        <p style="color: var(--text-muted); font-size: 0.85rem; margin-top: 4px;">
+          Assinatura L = [2, 2, 2, 2] | Vértices n = 12 | Espinha k = 4
+        </p>
+      </div>
+      <div id="vencedor-badge" class="badge">Variação Principal</div>
+    </header>
+
+    <div class="stage">
+      <svg id="svg-canvas" viewBox="0 0 900 400"></svg>
+
+      <div class="legend">
+        <div class="legend-item"><div class="legend-box" style="background: var(--livre-fill); border: 2px solid var(--livre);"></div> Livre</div>
+        <div class="legend-item"><div class="legend-box" style="background: var(--alice);"></div> Jogada de Alice</div>
+        <div class="legend-item"><div class="legend-box" style="background: var(--bob);"></div> Jogada de Bob</div>
+        <div class="legend-item"><div class="legend-box" style="background: var(--prop);"></div> Fecho P3 (Propagado)</div>
+      </div>
+
+      <div class="controls">
+        <button id="btn-prev" onclick="mudarTurno(-1)">◀ Anterior</button>
+        <button id="btn-play" class="btn-play" onclick="alternarPlay()">▶ Reproduzir</button>
+        <button id="btn-next" onclick="mudarTurno(1)">Próximo ▶</button>
+        <div class="slider-wrap">
+          <span style="font-size: 0.85rem; font-weight: bold;">Turno:</span>
+          <input type="range" id="slider" min="0" max="10" value="0" oninput="irParaTurno(parseInt(this.value))">
+          <span id="label-turno" style="font-size: 0.85rem; font-weight: bold; width: 30px;">0</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="info-card">
+      <div class="info-item">
+        <h3>Turno Atual</h3>
+        <p id="info-turno">0 / 10</p>
+      </div>
+      <div class="info-item">
+        <h3>Jogador da Vez</h3>
+        <p id="info-jogador">---</p>
+      </div>
+      <div class="info-item">
+        <h3>Vértice Escolhido</h3>
+        <p id="info-lance">---</p>
+      </div>
+      <div class="info-item">
+        <h3>Propagações P3 no Lance</h3>
+        <p id="info-props">---</p>
+      </div>
+      <div class="info-item">
+        <h3>Grafo Infectado</h3>
+        <p id="info-progresso">0% (0/12)</p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const DADOS = {"assinatura": [2, 2, 2, 2], "n": 12, "k": 4, "nos": [{"id": 0, "rotulo": "v1", "x": 60.0, "y": 200.0, "eh_espinha": true}, {"id": 1, "rotulo": "v2", "x": 320.0, "y": 200.0, "eh_espinha": true}, {"id": 2, "rotulo": "v3", "x": 580.0, "y": 200.0, "eh_espinha": true}, {"id": 3, "rotulo": "v4", "x": 840.0, "y": 200.0, "eh_espinha": true}, {"id": 4, "rotulo": "v5", "x": 60.0, "y": 60.0, "eh_espinha": false}, {"id": 5, "rotulo": "v6", "x": 60.0, "y": 340.0, "eh_espinha": false}, {"id": 6, "rotulo": "v7", "x": 320.0, "y": 60.0, "eh_espinha": false}, {"id": 7, "rotulo": "v8", "x": 320.0, "y": 340.0, "eh_espinha": false}, {"id": 8, "rotulo": "v9", "x": 580.0, "y": 60.0, "eh_espinha": false}, {"id": 9, "rotulo": "v10", "x": 580.0, "y": 340.0, "eh_espinha": false}, {"id": 10, "rotulo": "v11", "x": 840.0, "y": 60.0, "eh_espinha": false}, {"id": 11, "rotulo": "v12", "x": 840.0, "y": 340.0, "eh_espinha": false}], "arestas": [{"u": 0, "v": 1}, {"u": 0, "v": 4}, {"u": 0, "v": 5}, {"u": 1, "v": 2}, {"u": 1, "v": 6}, {"u": 1, "v": 7}, {"u": 2, "v": 3}, {"u": 2, "v": 8}, {"u": 2, "v": 9}, {"u": 3, "v": 10}, {"u": 3, "v": 11}], "historico": [{"turno": 0, "jogador": "Início", "jogada_rotulo": null, "jogada_idx": null, "propagados_rotulos": [], "propagados_indices": [], "jogadas_alice": [], "jogadas_bob": [], "todos_propagados": [], "todos_infectados": []}, {"turno": 1, "jogador": "Alice", "jogada_rotulo": "v1", "jogada_idx": 0, "propagados_rotulos": [], "propagados_indices": [], "jogadas_alice": [0], "jogadas_bob": [], "todos_propagados": [], "todos_infectados": [0]}, {"turno": 2, "jogador": "Bob", "jogada_rotulo": "v7", "jogada_idx": 6, "propagados_rotulos": ["v2"], "propagados_indices": [1], "jogadas_alice": [0], "jogadas_bob": [6], "todos_propagados": [1], "todos_infectados": [0, 1, 6]}, {"turno": 3, "jogador": "Alice", "jogada_rotulo": "v3", "jogada_idx": 2, "propagados_rotulos": [], "propagados_indices": [], "jogadas_alice": [0, 2], "jogadas_bob": [6], "todos_propagados": [1], "todos_infectados": [0, 1, 2, 6]}, {"turno": 4, "jogador": "Bob", "jogada_rotulo": "v11", "jogada_idx": 10, "propagados_rotulos": ["v4"], "propagados_indices": [3], "jogadas_alice": [0, 2], "jogadas_bob": [10, 6], "todos_propagados": [1, 3], "todos_infectados": [0, 1, 2, 3, 6, 10]}, {"turno": 5, "jogador": "Alice", "jogada_rotulo": "v5", "jogada_idx": 4, "propagados_rotulos": [], "propagados_indices": [], "jogadas_alice": [0, 2, 4], "jogadas_bob": [10, 6], "todos_propagados": [1, 3], "todos_infectados": [0, 1, 2, 3, 4, 6, 10]}, {"turno": 6, "jogador": "Bob", "jogada_rotulo": "v6", "jogada_idx": 5, "propagados_rotulos": [], "propagados_indices": [], "jogadas_alice": [0, 2, 4], "jogadas_bob": [10, 5, 6], "todos_propagados": [1, 3], "todos_infectados": [0, 1, 2, 3, 4, 5, 6, 10]}, {"turno": 7, "jogador": "Alice", "jogada_rotulo": "v8", "jogada_idx": 7, "propagados_rotulos": [], "propagados_indices": [], "jogadas_alice": [0, 2, 4, 7], "jogadas_bob": [10, 5, 6], "todos_propagados": [1, 3], "todos_infectados": [0, 1, 2, 3, 4, 5, 6, 7, 10]}, {"turno": 8, "jogador": "Bob", "jogada_rotulo": "v9", "jogada_idx": 8, "propagados_rotulos": [], "propagados_indices": [], "jogadas_alice": [0, 2, 4, 7], "jogadas_bob": [8, 10, 5, 6], "todos_propagados": [1, 3], "todos_infectados": [0, 1, 2, 3, 4, 5, 6, 7, 8, 10]}, {"turno": 9, "jogador": "Alice", "jogada_rotulo": "v10", "jogada_idx": 9, "propagados_rotulos": [], "propagados_indices": [], "jogadas_alice": [0, 2, 4, 7, 9], "jogadas_bob": [8, 10, 5, 6], "todos_propagados": [1, 3], "todos_infectados": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]}, {"turno": 10, "jogador": "Bob", "jogada_rotulo": "v12", "jogada_idx": 11, "propagados_rotulos": [], "propagados_indices": [], "jogadas_alice": [0, 2, 4, 7, 9], "jogadas_bob": [5, 6, 8, 10, 11], "todos_propagados": [1, 3], "todos_infectados": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]}]};
+    let turnoAtual = 0;
+    let timerPlay = null;
+
+    const svg = document.getElementById("svg-canvas");
+
+    function renderizarGrafo() {
+      svg.innerHTML = "";
+      const estado = DADOS.historico[turnoAtual];
+
+      const infSet = new Set(estado.todos_infectados);
+      const aliceSet = new Set(estado.jogadas_alice);
+      const bobSet = new Set(estado.jogadas_bob);
+      const propSet = new Set(estado.todos_propagados);
+      const jAtual = estado.jogada_idx;
+      const propsAtuais = new Set(estado.propagados_indices);
+
+      // 1. Arestas
+      DADOS.arestas.forEach(a => {
+        const u = DADOS.nos[a.u];
+        const v = DADOS.nos[a.v];
+        const ativa = infSet.has(a.u) && infSet.has(a.v);
+        const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+        line.setAttribute("x1", u.x);
+        line.setAttribute("y1", u.y);
+        line.setAttribute("x2", v.x);
+        line.setAttribute("y2", v.y);
+        line.setAttribute("class", "edge" + (ativa ? " active" : ""));
+        svg.appendChild(line);
+      });
+
+      // 2. Nós
+      DADOS.nos.forEach(n => {
+        const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
+
+        let corFill = "var(--livre-fill)";
+        let corBorda = "var(--livre)";
+        let raio = n.eh_espinha ? 18 : 15;
+        let larguraBorda = 2;
+
+        if (n.id === jAtual) {
+          corFill = estado.jogador === "Alice" ? "var(--alice)" : "var(--bob)";
+          corBorda = "#ffffff";
+          larguraBorda = 3.5;
+          raio += 4;
+        } else if (propsAtuais.has(n.id)) {
+          corFill = "var(--prop)";
+          corBorda = "#fef08a";
+          larguraBorda = 3.5;
+          raio += 3;
+        } else if (aliceSet.has(n.id)) {
+          corFill = "var(--alice)";
+          corBorda = "#7f1d1d";
+        } else if (bobSet.has(n.id)) {
+          corFill = "var(--bob)";
+          corBorda = "#0c4a6e";
+        } else if (propSet.has(n.id)) {
+          corFill = "var(--prop)";
+          corBorda = "#78350f";
+        }
+
+        const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+        circle.setAttribute("cx", n.x);
+        circle.setAttribute("cy", n.y);
+        circle.setAttribute("r", raio);
+        circle.setAttribute("fill", corFill);
+        circle.setAttribute("stroke", corBorda);
+        circle.setAttribute("stroke-width", larguraBorda);
+        circle.setAttribute("class", "node-circle");
+
+        const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
+        text.setAttribute("x", n.x);
+        text.setAttribute("y", n.y);
+        text.setAttribute("fill", infSet.has(n.id) ? "#ffffff" : "#94a3b8");
+        text.setAttribute("class", "node-text");
+        text.textContent = n.rotulo;
+
+        g.appendChild(circle);
+        g.appendChild(text);
+        svg.appendChild(g);
+      });
+
+      // Atualiza card de informações
+      document.getElementById("slider").value = turnoAtual;
+      document.getElementById("label-turno").textContent = turnoAtual;
+      document.getElementById("info-turno").textContent = `${turnoAtual} / ${DADOS.historico.length - 1}`;
+
+      if (turnoAtual === 0) {
+        document.getElementById("info-jogador").textContent = "Alice (Início)";
+        document.getElementById("info-lance").textContent = "---";
+        document.getElementById("info-props").textContent = "Nenhuma";
+      } else {
+        document.getElementById("info-jogador").textContent = estado.jogador;
+        document.getElementById("info-lance").textContent = estado.jogada_rotulo;
+        document.getElementById("info-props").textContent = estado.propagados_rotulos.length > 0
+          ? estado.propagados_rotulos.join(", ")
+          : "Nenhuma";
+      }
+
+      const pct = Math.round((estado.todos_infectados.length / DADOS.n) * 100);
+      document.getElementById("info-progresso").textContent = `${pct}% (${estado.todos_infectados.length}/${DADOS.n})`;
+
+      document.getElementById("btn-prev").disabled = (turnoAtual === 0);
+      document.getElementById("btn-next").disabled = (turnoAtual === DADOS.historico.length - 1);
+    }
+
+    function irParaTurno(t) {
+      turnoAtual = Math.max(0, Math.min(DADOS.historico.length - 1, t));
+      renderizarGrafo();
+    }
+
+    function mudarTurno(delta) {
+      irParaTurno(turnoAtual + delta);
+    }
+
+    function alternarPlay() {
+      const btn = document.getElementById("btn-play");
+      if (timerPlay) {
+        clearInterval(timerPlay);
+        timerPlay = null;
+        btn.textContent = "▶ Reproduzir";
+      } else {
+        btn.textContent = "⏸ Pausar";
+        if (turnoAtual === DADOS.historico.length - 1) {
+          irParaTurno(0);
+        }
+        timerPlay = setInterval(() => {
+          if (turnoAtual < DADOS.historico.length - 1) {
+            mudarTurno(1);
+          } else {
+            alternarPlay();
+          }
+        }, 900);
+      }
+    }
+
+    renderizarGrafo();
+  </script>
+</body>
+</html>
