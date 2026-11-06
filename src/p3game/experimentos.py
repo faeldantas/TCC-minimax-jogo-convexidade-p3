@@ -221,6 +221,118 @@ def executar_bateria_3_ablacao() -> list[dict]:
     return resultados
 
 
+def analisar_uniforme_expansao(m: int, p: int, id_inst: int = 1) -> dict:
+    """
+    Analisa a expansão da espinha diametral para um caterpillar uniforme C(m, p).
+    Alice sempre começa jogando (jogador MAX = +1).
+    """
+    L = uniforme(m, p)
+    cat = Caterpillar(L)
+    t0 = time.perf_counter()
+    v, solver = resolver_caterpillar(L, corte=True, memoizacao=True, simetria=True)
+    tempo_total_s = time.perf_counter() - t0
+
+    pv = solver.variacao_principal()
+    jogadas_alice = sum(1 for passo in pv if passo["jogador"] == "Alice")
+    jogadas_bob = sum(1 for passo in pv if passo["jogador"] == "Bob")
+    total_turnos = len(pv)
+    propagados_total = cat.n - total_turnos
+    taxa_propagacao = round((propagados_total / cat.n) * 100.0, 2)
+
+    venc_alice_idx = solver.jogadas_vencedoras() if v == 1 else []
+    jogadas_venc_alice = [cat.rotulos[j] for j in venc_alice_idx]
+
+    total_hits = solver.stats.acertos_tabela
+    total_nos = solver.stats.nos_visitados
+    taxa_hits = round((total_hits / max(1, total_nos)) * 100.0, 2)
+
+    trilha_str = " -> ".join(
+        f"{passo['jogador'][0]}({passo['jogada']})"
+        + (f"+{passo['propagados']}" if passo["propagados"] else "")
+        for passo in pv
+    )
+
+    folhas_totais = len(cat.folhas)
+
+    return {
+        "id": id_inst,
+        "m": m,
+        "p": p,
+        "k_espinha": cat.k,
+        "n_vertices": cat.n,
+        "folhas_totais": folhas_totais,
+        "paridade_folhas": "Par" if folhas_totais % 2 == 0 else "Ímpar",
+        "assinatura": str(list(L)),
+        "solucao_otima_encontrada": True,
+        "utilidade": v,
+        "vencedor_otimo": "Alice" if v == 1 else "Bob",
+        "jogadas_alice": jogadas_alice,
+        "jogadas_bob": jogadas_bob,
+        "total_turnos": total_turnos,
+        "vertices_propagados": propagados_total,
+        "taxa_propagacao_perc": taxa_propagacao,
+        "tempo_ms": round(tempo_total_s * 1000.0, 3),
+        "nos_visitados": total_nos,
+        "estados_tabela": solver.stats.entradas_tabela,
+        "hits_tabela": total_hits,
+        "taxa_hits_perc": taxa_hits,
+        "qtd_jogadas_venc_alice": len(jogadas_venc_alice),
+        "jogadas_vencedoras_iniciais_alice": ", ".join(jogadas_venc_alice) if jogadas_venc_alice else "Nenhuma (Bob vence)",
+        "variacao_principal": pv,
+        "trilha_otima": trilha_str,
+    }
+
+
+def executar_experimento_uniformes_espinha(
+    lista_p: list[int] = (1, 2),
+    m_min: int = 1,
+    m_max: int = 8,
+    salvar_arquivos: bool = True,
+    pasta_resultados: str | None = None,
+) -> list[dict]:
+    """
+    Executa o experimento de expansão da espinha (m_min <= m <= m_max)
+    para caterpillars uniformes C(m, p) fixando valores de p.
+    """
+    raiz = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    pasta_res = pasta_resultados or os.path.join(raiz, "resultados")
+    if salvar_arquivos:
+        os.makedirs(pasta_res, exist_ok=True)
+
+    registros = []
+    id_inst = 1
+    for p in lista_p:
+        for m in range(m_min, m_max + 1):
+            reg = analisar_uniforme_expansao(m, p, id_inst)
+            registros.append(reg)
+            id_inst += 1
+
+    if salvar_arquivos and registros:
+        # Salvar CSV
+        caminho_csv = os.path.join(pasta_res, "experimento_uniformes_espinha.csv")
+        campos = [
+            "id", "m", "p", "k_espinha", "n_vertices", "folhas_totais", "paridade_folhas",
+            "assinatura", "solucao_otima_encontrada", "utilidade", "vencedor_otimo",
+            "jogadas_alice", "jogadas_bob", "total_turnos", "vertices_propagados",
+            "taxa_propagacao_perc", "tempo_ms", "nos_visitados", "estados_tabela",
+            "hits_tabela", "taxa_hits_perc", "qtd_jogadas_venc_alice",
+            "jogadas_vencedoras_iniciais_alice", "trilha_otima"
+        ]
+        with open(caminho_csv, "w", newline="", encoding="utf-8-sig") as f:
+            w = csv.DictWriter(f, fieldnames=campos, delimiter=";")
+            w.writeheader()
+            for r in registros:
+                linha_csv = {k: r[k] for k in campos}
+                w.writerow(linha_csv)
+
+        # Salvar JSON
+        caminho_json = os.path.join(pasta_res, "experimento_uniformes_espinha.json")
+        with open(caminho_json, "w", encoding="utf-8") as f:
+            json.dump(registros, f, ensure_ascii=False, indent=2)
+
+    return registros
+
+
 def executar_tudo():
     raiz = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     pasta_res = os.path.join(raiz, "resultados")

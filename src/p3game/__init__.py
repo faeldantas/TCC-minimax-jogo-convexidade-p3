@@ -23,3 +23,7 @@ def resolver_caterpillar(L, **opcoes) -> tuple[int, Minimax]:
     jogo = JogoFechoConvexoP3Caterpillar(Caterpillar(tuple(L)))
     solver = Minimax(jogo, **opcoes)
     return solver.resolver(), solver
+
+
+from .experimentos import analisar_uniforme_expansao, executar_experimento_uniformes_espinha
+
