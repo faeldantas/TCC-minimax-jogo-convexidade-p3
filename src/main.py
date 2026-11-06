@@ -30,6 +30,8 @@ from p3game.visualizacao import (
     gerar_painel_estatico,
     abrir_visualizador_interativo,
     gerar_html_interativo,
+    gerar_interface_jogavel_html,
+    jogar_contra_ia_terminal,
 )
 
 
@@ -167,6 +169,23 @@ def main():
 
     # Modo de Execução
     parser.add_argument(
+        "--jogar",
+        action="store_true",
+        help="Inicia o jogo interativo contra a IA (Minimax) abrindo a interface gráfica no navegador.",
+    )
+    parser.add_argument(
+        "--jogar-terminal",
+        action="store_true",
+        help="Inicia o jogo interativo contra a IA (Minimax) diretamente no terminal de texto.",
+    )
+    parser.add_argument(
+        "--lado",
+        type=str,
+        choices=["alice", "bob"],
+        default="alice",
+        help="Escolha seu lado para jogar: 'alice' (inicia, peças vermelhas) ou 'bob' (2º lance, peças azuis). Padrão: 'alice'",
+    )
+    parser.add_argument(
         "--visualizar", "--vis",
         action="store_true",
         help="Ativa o modo de visualização gráfica para um grafo específico.",
@@ -243,7 +262,41 @@ def main():
 
     args = parser.parse_args()
 
-    # Se a flag --visualizar ou --janela ou --navegador foi passada, executa a visualização
+    raiz = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    pasta_res = os.path.join(raiz, "resultados")
+    os.makedirs(pasta_res, exist_ok=True)
+
+    # 1. Modo Jogar no Navegador (HTML5 interativo)
+    if args.jogar:
+        if args.assinatura:
+            L = tuple(int(x.strip()) for x in args.assinatura.split(","))
+        else:
+            L = assinatura_caterpillar_cheio(args.m_visualizar, modo=args.modo)
+        cat = Caterpillar(L)
+        caminho_jogo_html = os.path.join(pasta_res, "jogar_contra_ia.html")
+        gerar_interface_jogavel_html(caminho_jogo_html, cat_inicial=cat)
+
+        print("=" * 85)
+        print("JOGAR CONTRA A IA MINIMAX (APLICAÇÃO WEB INTERATIVA)")
+        print("=" * 85)
+        print(f"Grafo inicial: Assinatura L = {cat.assinatura} (n={cat.n} vértices)")
+        print(f"Aplicação gerada com sucesso em:\n -> {caminho_jogo_html}")
+        print("Abrindo no seu navegador padrão...")
+        webbrowser.open(f"file://{os.path.abspath(caminho_jogo_html)}")
+        return
+
+    # 2. Modo Jogar no Terminal (CLI)
+    if args.jogar_terminal:
+        if args.assinatura:
+            L = tuple(int(x.strip()) for x in args.assinatura.split(","))
+        else:
+            L = assinatura_caterpillar_cheio(args.m_visualizar, modo=args.modo)
+        cat = Caterpillar(L)
+        humano_alice = (args.lado.lower() == "alice")
+        jogar_contra_ia_terminal(cat, humano_eh_alice=humano_alice)
+        return
+
+    # 3. Modo Visualização Gráfica (PNG / Janela Matplotlib / HTML de partida pronta)
     if args.visualizar or args.janela or args.navegador or args.assinatura:
         executar_modo_visualizacao(args)
         return

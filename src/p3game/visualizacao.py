@@ -841,3 +841,977 @@ def gerar_html_interativo(
         f.write(html_template)
 
     return caminho_html
+
+
+def jogar_contra_ia_terminal(cat: Caterpillar, humano_eh_alice: bool = True) -> None:
+    """
+    Permite ao usuário jogar interativamente contra o algoritmo Minimax no terminal.
+    Alice sempre começa jogando.
+    """
+    from .convexidade import fecho_p3, para_mascara, de_mascara
+    from .jogo import JogoFechoConvexoP3Caterpillar
+    from .minimax import Minimax, MAX, MIN
+
+    print("\n" + "=" * 80)
+    print("JOGO DA CONVEXIDADE P_3 -- JOGADOR VS IA (MINIMAX)")
+    print("=" * 80)
+    print(f"Grafo Caterpillar: Assinatura L = {cat.assinatura}")
+    print(f"Total de vértices: n = {cat.n} (Rótulos: {cat.rotulos[0]} até {cat.rotulos[-1]})")
+    print(f"Convenção Normal: Vence quem fizer o ÚLTIMO lance (infectando todo o grafo).")
+
+    humano_nome = "Alice (MAX, +1)" if humano_eh_alice else "Bob (MIN, -1)"
+    ia_nome = "Bob (MIN, -1)" if humano_eh_alice else "Alice (MAX, +1)"
+    print(f"Você está jogando como: {humano_nome}")
+    print(f"A máquina (IA) joga como: {ia_nome}")
+    print("Comandos especiais: digite 'dica' para sugestão ótima, ou 'sair' para encerrar.")
+    print("=" * 80 + "\n")
+
+    S = 0
+    turno = 1
+    jogador_atual = MAX  # Alice sempre inicia
+
+    rot_para_idx = {r: i for i, r in enumerate(cat.rotulos)}
+    completo = (1 << cat.n) - 1
+
+    historico_lances = []
+
+    while S != completo:
+        vez_do_humano = (jogador_atual == MAX and humano_eh_alice) or (jogador_atual == MIN and not humano_eh_alice)
+        nome_vez = "Alice" if jogador_atual == MAX else "Bob"
+        papel = "(Você)" if vez_do_humano else "(IA Minimax)"
+
+        livres = [cat.rotulos[v] for v in range(cat.n) if not (S >> v) & 1]
+        infectados = [cat.rotulos[v] for v in range(cat.n) if (S >> v) & 1]
+
+        print(f"--- TURNO {turno}: Vez de {nome_vez} {papel} ---")
+        print(f"Vértices infectados ({len(infectados)}/{cat.n}): {', '.join(infectados) if infectados else 'Nenhum'}")
+        print(f"Vértices livres ({len(livres)}): {', '.join(livres)}")
+
+        if vez_do_humano:
+            # Entrada do usuário
+            while True:
+                entrada = input(f"\n[{nome_vez}] Escolha um vértice livre para infectar: ").strip()
+                if entrada.lower() == "sair":
+                    print("\nPartida cancelada pelo usuário.")
+                    return
+                if entrada.lower() == "dica":
+                    # Calcula jogadas ótimas
+                    jogo = JogoFechoConvexoP3Caterpillar(cat)
+                    solver = Minimax(jogo, corte=True, memoizacao=True, simetria=True)
+                    outro = -jogador_atual
+                    vencedoras = [
+                        cat.rotulos[j] for j, filho in jogo.jogadas(S)
+                        if solver.valor(filho, outro) == jogador_atual
+                    ]
+                    if vencedoras:
+                        print(f"💡 DICA: As jogadas vencedoras da posição atual são: {', '.join(vencedoras)}")
+                    else:
+                        print("💡 DICA: Sob jogo perfeito do oponente, a posição é difícil, mas tente manter a espinha equilibrada!")
+                    continue
+
+                # Normaliza rótulo (ex: 'v1' ou '1')
+                escolhido_rot = entrada if entrada.startswith("v") else f"v{entrada}"
+                if escolhido_rot in rot_para_idx and not (S >> rot_para_idx[escolhido_rot]) & 1:
+                    j_idx = rot_para_idx[escolhido_rot]
+                    break
+                print(f"❌ Vértice inválido ou já infectado. Escolha entre: {', '.join(livres)}")
+        else:
+            # Lance da IA Minimax
+            print("\n🤖 IA calculando jogada ótima...")
+            jogo = JogoFechoConvexoP3Caterpillar(cat)
+            solver = Minimax(jogo, corte=True, memoizacao=True, simetria=True)
+            jogadas_legais = jogo.jogadas(S)
+
+            # Procura jogada que mantém o valor do jogador IA
+            melhor_j = None
+            for j, filho in jogadas_legais:
+                if solver.valor(filho, -jogador_atual) == jogador_atual:
+                    melhor_j = j
+                    break
+            if melhor_j is None:
+                melhor_j = jogadas_legais[0][0]
+
+            j_idx = melhor_j
+            escolhido_rot = cat.rotulos[j_idx]
+            print(f"🤖 IA jogou em: {escolhido_rot}")
+
+        # Aplica fecho P_3
+        novo_S, propagados = fecho_p3(cat.adj, S | (1 << j_idx))
+        props_rot = [cat.rotulos[p] for p in propagados]
+
+        if props_rot:
+            print(f"⚡ Efeito Cascata Fecho P_3: {escolhido_rot} infectou automaticamente por propagação: {', '.join(props_rot)}")
+        else:
+            print(f"Sem propagação adicional neste lance.")
+
+        historico_lances.append({
+            "turno": turno,
+            "jogador": f"{nome_vez} {papel}",
+            "jogada": escolhido_rot,
+            "propagados": props_rot,
+        })
+
+        S = novo_S
+        print("-" * 80 + "\n")
+
+        if S == completo:
+            print("=" * 80)
+            if vez_do_humano:
+                print(f"🎉 PARABÉNS! Você realizou o último lance válido em {escolhido_rot} e VENCEU A MÁQUINA!")
+            else:
+                print(f"💀 FIM DE JOGO! A IA realizou o último lance válido em {escolhido_rot} e venceu a partida.")
+            print("=" * 80)
+            print("\nTrilha completa da partida:")
+            for p in historico_lances:
+                prop_str = f" (+ {', '.join(p['propagados'])})" if p['propagados'] else ""
+                print(f"  Turno {p['turno']:2d} | {p['jogador']:<20}: jogou {p['jogada']}{prop_str}")
+            print()
+            return
+
+        jogador_atual = -jogador_atual
+        turno += 1
+
+
+def gerar_interface_jogavel_html(
+    caminho_html: str,
+    cat_inicial: Caterpillar | None = None,
+) -> str:
+    """
+    Gera uma aplicação web autônoma completa (HTML5 + SVG interativo) que permite
+    ao usuário jogar contra o algoritmo Minimax diretamente no navegador.
+    Inclui motor Minimax embutido em JavaScript com fecho P3, dicas e múltiplos grafos.
+    """
+    if cat_inicial is None:
+        cat_inicial = Caterpillar((2, 2, 2, 2))  # Caterpillar cheio m=4 padrão
+
+    pos = calcular_layout_caterpillar(cat_inicial)
+    xs = [x for x, y in pos.values()]
+    ys = [y for x, y in pos.values()]
+    min_x, max_x = min(xs), max(xs)
+    min_y, max_y = min(ys), max(ys)
+
+    largura_svg = 950
+    altura_svg = 420
+    margem = 60
+
+    dx = max_x - min_x if max_x > min_x else 1.0
+    dy = max_y - min_y if max_y > min_y else 1.0
+
+    nos_svg = []
+    for v in range(cat_inicial.n):
+        x, y = pos[v]
+        svg_x = margem + ((x - min_x) / dx) * (largura_svg - 2 * margem)
+        svg_y = altura_svg - (margem + ((y - min_y) / dy) * (altura_svg - 2 * margem))
+        nos_svg.append({
+            "id": v,
+            "rotulo": cat_inicial.rotulos[v],
+            "x": round(svg_x, 1),
+            "y": round(svg_y, 1),
+            "eh_espinha": v in cat_inicial.espinha,
+        })
+
+    G = cat_inicial.para_networkx()
+    arestas_svg = [{"u": u, "v": v} for u, v in G.edges()]
+
+    adj_json = [cat_inicial.adj[i] for i in range(cat_inicial.n)]
+    rotulos_json = list(cat_inicial.rotulos)
+
+    html_template = f"""<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Jogar Contra a IA -- Jogo da Convexidade P3 em Caterpillars</title>
+  <style>
+    :root {{
+      --bg: #0b132b;
+      --card-bg: #1c2541;
+      --border: #3a506b;
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+      --alice: #e63946;
+      --bob: #00b4d8;
+      --prop: #ffb703;
+      --prop-glow: rgba(255, 183, 3, 0.45);
+      --dica: #10b981;
+      --livre: #475569;
+      --livre-fill: #1e293b;
+    }}
+    * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+    body {{
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 20px 16px;
+      min-height: 100vh;
+    }}
+    .container {{
+      max-width: 1100px;
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }}
+    header {{
+      background: var(--card-bg);
+      padding: 18px 24px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
+    }}
+    h1 {{ font-size: 1.3rem; font-weight: 700; color: #fff; }}
+    .badge {{
+      display: inline-block;
+      padding: 6px 14px;
+      border-radius: 9999px;
+      font-size: 0.85rem;
+      font-weight: 700;
+      background: #334155;
+    }}
+    .badge-alice {{ background: var(--alice); color: white; }}
+    .badge-bob {{ background: var(--bob); color: #0b132b; }}
+    .panel-config {{
+      background: var(--card-bg);
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      padding: 14px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 12px;
+      font-size: 0.9rem;
+    }}
+    select, input[type=text] {{
+      background: #0f172a;
+      color: #fff;
+      border: 1px solid var(--border);
+      padding: 6px 12px;
+      border-radius: 6px;
+      outline: none;
+      font-size: 0.85rem;
+    }}
+    .stage {{
+      background: var(--card-bg);
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      position: relative;
+    }}
+    svg {{
+      width: 100%;
+      height: 420px;
+      background: #0b132b;
+      border-radius: 8px;
+      border: 1px solid #1c2541;
+      user-select: none;
+    }}
+    .edge {{ stroke: #334155; stroke-width: 2.5; transition: stroke 0.3s; }}
+    .edge.active {{ stroke: #f8fafc; stroke-width: 3.5; }}
+    .node-circle {{
+      cursor: pointer;
+      transition: fill 0.25s, stroke 0.25s, r 0.2s, filter 0.2s;
+    }}
+    .node-circle:hover:not(.infected) {{
+      filter: drop-shadow(0 0 8px #38bdf8);
+      stroke: #38bdf8;
+      stroke-width: 3;
+    }}
+    .node-circle.dica {{
+      stroke: var(--dica) !important;
+      stroke-width: 4 !important;
+      filter: drop-shadow(0 0 10px #10b981) !important;
+    }}
+    .node-text {{
+      font-size: 11px;
+      font-weight: bold;
+      text-anchor: middle;
+      dominant-baseline: central;
+      pointer-events: none;
+      user-select: none;
+    }}
+    .banner-status {{
+      width: 100%;
+      padding: 12px 18px;
+      border-radius: 8px;
+      margin-top: 14px;
+      font-size: 1rem;
+      font-weight: 600;
+      text-align: center;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      background: #1e293b;
+      border: 1px solid var(--border);
+    }}
+    .banner-status.vitoria {{ background: rgba(16, 185, 129, 0.2); border-color: #10b981; color: #34d399; }}
+    .banner-status.derrota {{ background: rgba(239, 68, 68, 0.2); border-color: #ef4444; color: #f87171; }}
+    .controls {{
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      margin-top: 16px;
+      width: 100%;
+      flex-wrap: wrap;
+    }}
+    button {{
+      background: #334155;
+      color: #fff;
+      border: 1px solid var(--border);
+      padding: 8px 16px;
+      border-radius: 8px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }}
+    button:hover:not(:disabled) {{ background: #475569; }}
+    button:disabled {{ opacity: 0.4; cursor: not-allowed; }}
+    .btn-action {{ background: #2563eb; border-color: #3b82f6; }}
+    .btn-action:hover:not(:disabled) {{ background: #1d4ed8; }}
+    .btn-dica {{ background: #059669; border-color: #10b981; }}
+    .btn-dica:hover:not(:disabled) {{ background: #047857; }}
+    .grid-info {{
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 16px;
+    }}
+    @media (max-width: 800px) {{
+      .grid-info {{ grid-template-columns: 1fr; }}
+    }}
+    .info-card {{
+      background: var(--card-bg);
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      padding: 18px;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+      gap: 12px;
+    }}
+    .info-item h3 {{ font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); margin-bottom: 4px; }}
+    .info-item p {{ font-size: 1.05rem; font-weight: 700; }}
+    .log-card {{
+      background: var(--card-bg);
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      padding: 16px;
+      max-height: 220px;
+      overflow-y: auto;
+      font-size: 0.85rem;
+    }}
+    .log-card h3 {{ font-size: 0.8rem; text-transform: uppercase; color: var(--text-muted); margin-bottom: 8px; }}
+    .log-item {{ padding: 4px 0; border-bottom: 1px solid #2d3748; display: flex; justify-content: space-between; }}
+    .legend {{
+      display: flex;
+      justify-content: center;
+      gap: 16px;
+      margin-top: 10px;
+      flex-wrap: wrap;
+      font-size: 0.85rem;
+    }}
+    .legend-item {{ display: flex; align-items: center; gap: 6px; }}
+    .legend-box {{ width: 14px; height: 14px; border-radius: 50%; }}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div>
+        <h1>Jogo da Convexidade P3: Humano vs IA Minimax</h1>
+        <p style="color: var(--text-muted); font-size: 0.85rem; margin-top: 4px;">
+          Convenção Normal: Vence quem realizar a ÚLTIMA jogada válida infectando a totalidade do grafo.
+        </p>
+      </div>
+      <div id="turno-badge" class="badge badge-alice">Vez de Alice (MAX)</div>
+    </header>
+
+    <div class="panel-config">
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <label for="select-grafo"><strong>Grafo:</strong></label>
+        <select id="select-grafo" onchange="trocarGrafo(this.value)">
+          <option value="2,2">C(2, 2) Cheio (n=6) -- Alice vence</option>
+          <option value="2,2,2">C(3, 2) Cheio (n=9) -- Alice vence</option>
+          <option value="2,2,2,2" selected>C(4, 2) Cheio (n=12) -- BOB VENCE (Desafio!)</option>
+          <option value="2,2,2,2,2">C(5, 2) Cheio (n=15) -- Alice vence</option>
+          <option value="0,2,0,1,1,0">Grafo TCC L=(0,2,0,1,1,0) (n=10) -- Bob vence</option>
+          <option value="0,0,0,0,0">Caminho P5 (n=5) -- Alice vence</option>
+          <option value="0,0,0,0,0,0">Caminho P6 (n=6) -- Alice vence</option>
+          <option value="0,2,0">Estrela K1,4 (n=5) -- Alice vence</option>
+        </select>
+      </div>
+
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <label for="select-lado"><strong>Você joga como:</strong></label>
+        <select id="select-lado" onchange="reiniciarJogo()">
+          <option value="alice" selected>Alice (1º lance, Peças Vermelhas)</option>
+          <option value="bob">Bob (2º lance, Peças Azuis)</option>
+        </select>
+      </div>
+
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <label for="select-ia"><strong>Inteligência da IA:</strong></label>
+        <select id="select-ia">
+          <option value="minimax" selected>Minimax Perfeito (Ótimo / Implacável)</option>
+          <option value="casual">Casual (Treinamento / Humano)</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="stage">
+      <svg id="svg-canvas" viewBox="0 0 {largura_svg} {altura_svg}"></svg>
+
+      <div class="legend">
+        <div class="legend-item"><div class="legend-box" style="background: var(--livre-fill); border: 2px solid var(--livre);"></div> Livre (Clique para jogar)</div>
+        <div class="legend-item"><div class="legend-box" style="background: var(--alice);"></div> Jogada de Alice</div>
+        <div class="legend-item"><div class="legend-box" style="background: var(--bob);"></div> Jogada de Bob</div>
+        <div class="legend-item"><div class="legend-box" style="background: var(--prop);"></div> Fecho P3 (Propagado)</div>
+        <div class="legend-item"><div class="legend-box" style="background: transparent; border: 2px dashed var(--dica);"></div> Dica Minimax</div>
+      </div>
+
+      <div id="banner-status" class="banner-status">
+        Clique em um vértice livre do grafo para realizar sua jogada inicial!
+      </div>
+
+      <div class="controls">
+        <button class="btn-action" onclick="reiniciarJogo()">🔄 Reiniciar Partida</button>
+        <button onclick="desfazerLance()" id="btn-undo">↩️ Desfazer Lance</button>
+        <button class="btn-dica" onclick="mostrarDicaMinimax()" id="btn-dica">💡 Pedir Dica do Minimax</button>
+      </div>
+    </div>
+
+    <div class="grid-info">
+      <div class="info-card">
+        <div class="info-item">
+          <h3>Turno Atual</h3>
+          <p id="info-turno">Turno 1</p>
+        </div>
+        <div class="info-item">
+          <h3>Jogador na Vez</h3>
+          <p id="info-vez">Alice (Você)</p>
+        </div>
+        <div class="info-item">
+          <h3>Último Lance</h3>
+          <p id="info-ultimo-lance">Nenhum</p>
+        </div>
+        <div class="info-item">
+          <h3>Propagados P3</h3>
+          <p id="info-props">0 nós</p>
+        </div>
+        <div class="info-item">
+          <h3>Infectados</h3>
+          <p id="info-progresso">0 / {cat_inicial.n} (0%)</p>
+        </div>
+      </div>
+
+      <div class="log-card">
+        <h3>Histórico da Partida</h3>
+        <div id="log-content">
+          <div style="color: var(--text-muted); font-style: italic;">Aguardando lance inicial...</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // --- MOTOR MATEMÁTICO EM JAVASCRIPT ---
+    let grafoAtual = {{
+      L: {list(cat_inicial.assinatura)},
+      n: {cat_inicial.n},
+      k: {cat_inicial.k},
+      adj: {json.dumps(adj_json)},
+      rotulos: {json.dumps(rotulos_json)},
+      nos: {json.dumps(nos_svg)},
+      arestas: {json.dumps(arestas_svg)}
+    }};
+
+    let S_atual = 0;
+    let jogadorAtual = 1; // +1 = Alice, -1 = Bob
+    let historicoPartida = [];
+    let dicasAtivas = new Set();
+    let bloqueado = false;
+
+    // Operador Fecho Convexo P3 em JS (BFS O(|V|+|E|) com contadores)
+    function fechoP3(adj, S_ini) {{
+      let n = adj.length;
+      let contador = new Int32Array(n);
+      let fila = [];
+      let enfileirado = new Uint8Array(n);
+
+      for (let v = 0; v < n; v++) {{
+        if (!((S_ini >> v) & 1)) {{
+          let c = 0;
+          for (let u of adj[v]) {{
+            if ((S_ini >> u) & 1) c++;
+          }}
+          contador[v] = c;
+          if (c >= 2) {{
+            fila.push(v);
+            enfileirado[v] = 1;
+          }}
+        }}
+      }}
+
+      let S = S_ini;
+      let propagados = [];
+      while (fila.length > 0) {{
+        let u = fila.shift();
+        S |= (1 << u);
+        propagados.push(u);
+        for (let w of adj[u]) {{
+          if (!((S >> w) & 1) && !enfileirado[w]) {{
+            contador[w]++;
+            if (contador[w] >= 2) {{
+              fila.push(w);
+              enfileirado[w] = 1;
+            }}
+          }}
+        }}
+      }}
+      return {{ fecho: S, propagados: propagados }};
+    }}
+
+    // Solucionador Minimax com Memoização e Poda Booleana em JS
+    let cacheMinimax = new Map();
+
+    function valorMinimax(adj, S, jogador) {{
+      let n = adj.length;
+      let completo = (1 << n) - 1;
+      if (S === completo) return -jogador;
+
+      let chave = S;
+      if (cacheMinimax.has(chave)) {{
+        return cacheMinimax.get(chave) * jogador;
+      }}
+
+      let v = -jogador;
+      for (let u = 0; u < n; u++) {{
+        if (!((S >> u) & 1)) {{
+          let prox = fechoP3(adj, S | (1 << u)).fecho;
+          let val = valorMinimax(adj, prox, -jogador);
+          if (jogador === 1) {{
+            if (val === 1) {{ v = 1; break; }}
+          }} else {{
+            if (val === -1) {{ v = -1; break; }}
+          }}
+        }}
+      }}
+      cacheMinimax.set(chave, v * jogador);
+      return v;
+    }}
+
+    function obterMelhorJogadaIA(adj, S, jogadorIA, casual = false) {{
+      let n = adj.length;
+      let candidatas = [];
+      let vencedoras = [];
+
+      for (let u = 0; u < n; u++) {{
+        if (!((S >> u) & 1)) {{
+          let prox = fechoP3(adj, S | (1 << u)).fecho;
+          let val = valorMinimax(adj, prox, -jogadorIA);
+          candidatas.push({{ jogada: u, val: val }});
+          if (val === jogadorIA) {{
+            vencedoras.push(u);
+          }}
+        }}
+      }}
+
+      if (casual && Math.random() < 0.35 && candidatas.length > 1) {{
+        return candidatas[Math.floor(Math.random() * candidatas.length)].jogada;
+      }}
+
+      if (vencedoras.length > 0) return vencedoras[0];
+      return candidatas[0].jogada;
+    }}
+
+    // --- RENDERIZAÇÃO E INTERAÇÃO ---
+    const svg = document.getElementById("svg-canvas");
+
+    function renderizarTabuleiro() {{
+      svg.innerHTML = "";
+      const completo = (1 << grafoAtual.n) - 1;
+
+      // Desenha Arestas
+      grafoAtual.arestas.forEach(a => {{
+        const u = grafoAtual.nos[a.u];
+        const v = grafoAtual.nos[a.v];
+        const ativa = ((S_atual >> a.u) & 1) && ((S_atual >> a.v) & 1);
+        const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+        line.setAttribute("x1", u.x);
+        line.setAttribute("y1", u.y);
+        line.setAttribute("x2", v.x);
+        line.setAttribute("y2", v.y);
+        line.setAttribute("class", "edge" + (ativa ? " active" : ""));
+        svg.appendChild(line);
+      }});
+
+      // Desenha Nós
+      grafoAtual.nos.forEach(n => {{
+        const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
+        const infectado = (S_atual >> n.id) & 1;
+
+        let corFill = "var(--livre-fill)";
+        let corBorda = "var(--livre)";
+        let raio = n.eh_espinha ? 20 : 16;
+        let larguraBorda = 2;
+
+        // Histórico de cores
+        for (let h of historicoPartida) {{
+          if (h.lance === n.id) {{
+            corFill = h.jogador === 1 ? "var(--alice)" : "var(--bob)";
+            corBorda = "#ffffff";
+            larguraBorda = 3;
+          }} else if (h.propagados.includes(n.id)) {{
+            corFill = "var(--prop)";
+            corBorda = "#fef08a";
+            larguraBorda = 2.5;
+          }}
+        }}
+
+        const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+        circle.setAttribute("cx", n.x);
+        circle.setAttribute("cy", n.y);
+        circle.setAttribute("r", raio);
+        circle.setAttribute("fill", corFill);
+        circle.setAttribute("stroke", corBorda);
+        circle.setAttribute("stroke-width", larguraBorda);
+
+        let classes = "node-circle";
+        if (infectado) classes += " infected";
+        if (dicasAtivas.has(n.id)) classes += " dica";
+        circle.setAttribute("class", classes);
+
+        if (!infectado && !bloqueado) {{
+          circle.onclick = () => realizarJogadaHumano(n.id);
+        }}
+
+        const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
+        text.setAttribute("x", n.x);
+        text.setAttribute("y", n.y);
+        text.setAttribute("fill", infectado ? "#ffffff" : "#94a3b8");
+        text.setAttribute("class", "node-text");
+        text.textContent = n.rotulo;
+
+        g.appendChild(circle);
+        g.appendChild(text);
+        svg.appendChild(g);
+      }});
+
+      atualizarPainelInfo();
+    }}
+
+    function atualizarPainelInfo() {{
+      const humanoEhAlice = document.getElementById("select-lado").value === "alice";
+      const vezDoHumano = (jogadorAtual === 1 && humanoEhAlice) || (jogadorAtual === -1 && !humanoEhAlice);
+      const completo = (1 << grafoAtual.n) - 1;
+
+      // Badge de turno
+      const badge = document.getElementById("turno-badge");
+      if (S_atual === completo) {{
+        badge.className = "badge";
+        badge.textContent = "Partida Concluída";
+        badge.style.background = "#10b981";
+      }} else if (jogadorAtual === 1) {{
+        badge.className = "badge badge-alice";
+        badge.textContent = `Vez de Alice (MAX) ${{vezDoHumano ? '-- Você' : '-- IA'}}`;
+      }} else {{
+        badge.className = "badge badge-bob";
+        badge.textContent = `Vez de Bob (MIN) ${{vezDoHumano ? '-- Você' : '-- IA'}}`;
+      }}
+
+      // Informações dos cards
+      document.getElementById("info-turno").textContent = `Turno ${{historicoPartida.length + 1}}`;
+      document.getElementById("info-vez").textContent = `${{jogadorAtual === 1 ? 'Alice' : 'Bob'}} ${{vezDoHumano ? '(Você)' : '(IA)'}}`;
+
+      let contagemInf = 0;
+      for (let i = 0; i < grafoAtual.n; i++) if ((S_atual >> i) & 1) contagemInf++;
+      let pct = Math.round((contagemInf / grafoAtual.n) * 100);
+      document.getElementById("info-progresso").textContent = `${{contagemInf}} / ${{grafoAtual.n}} (${{pct}}%)`;
+
+      document.getElementById("btn-undo").disabled = (historicoPartida.length === 0 || bloqueado);
+      document.getElementById("btn-dica").disabled = (S_atual === completo || !vezDoHumano || bloqueado);
+    }}
+
+    function realizarJogadaHumano(v) {{
+      const humanoEhAlice = document.getElementById("select-lado").value === "alice";
+      const vezDoHumano = (jogadorAtual === 1 && humanoEhAlice) || (jogadorAtual === -1 && !humanoEhAlice);
+
+      if (!vezDoHumano || bloqueado || ((S_atual >> v) & 1)) return;
+
+      dicasAtivas.clear();
+      executarLance(v, true);
+    }}
+
+    function executarLance(v, ehHumano) {{
+      const res = fechoP3(grafoAtual.adj, S_atual | (1 << v));
+      const completo = (1 << grafoAtual.n) - 1;
+
+      historicoPartida.push({{
+        S_anterior: S_atual,
+        jogador: jogadorAtual,
+        lance: v,
+        propagados: res.propagados,
+        ehHumano: ehHumano
+      }});
+
+      S_atual = res.fecho;
+
+      // Atualiza log
+      adicionarAoLog(jogadorAtual, v, res.propagados, ehHumano);
+
+      document.getElementById("info-ultimo-lance").textContent = grafoAtual.rotulos[v];
+      document.getElementById("info-props").textContent = res.propagados.length > 0
+        ? res.propagados.map(p => grafoAtual.rotulos[p]).join(", ")
+        : "Nenhuma";
+
+      renderizarTabuleiro();
+
+      // Checa condição de vitória (Convenção Normal: último a jogar vence)
+      if (S_atual === completo) {{
+        finalizarPartida(ehHumano);
+        return;
+      }}
+
+      jogadorAtual = -jogadorAtual;
+      renderizarTabuleiro();
+
+      // Se for a vez da IA, agenda jogada
+      const humanoEhAlice = document.getElementById("select-lado").value === "alice";
+      const vezDoHumano = (jogadorAtual === 1 && humanoEhAlice) || (jogadorAtual === -1 && !humanoEhAlice);
+
+      if (!vezDoHumano) {{
+        bloqueado = true;
+        document.getElementById("banner-status").className = "banner-status";
+        document.getElementById("banner-status").innerHTML = "🤖 IA Minimax pensando...";
+
+        setTimeout(() => {{
+          const modoCasual = document.getElementById("select-ia").value === "casual";
+          const lanceIA = obterMelhorJogadaIA(grafoAtual.adj, S_atual, jogadorAtual, modoCasual);
+          bloqueado = false;
+          executarLance(lanceIA, false);
+        }}, 450);
+      }} else {{
+        document.getElementById("banner-status").className = "banner-status";
+        document.getElementById("banner-status").innerHTML = "Sua vez! Escolha um vértice livre no grafo.";
+      }}
+    }}
+
+    function finalizarPartida(humanoVenceu) {{
+      bloqueado = true;
+      const banner = document.getElementById("banner-status");
+      if (humanoVenceu) {{
+        banner.className = "banner-status vitoria";
+        banner.innerHTML = "🏆 PARABÉNS! Você realizou o último lance válido e VENCEU A IA!";
+      }} else {{
+        banner.className = "banner-status derrota";
+        banner.innerHTML = "💀 FIM DE JOGO! A IA realizou o último lance válido e venceu a partida.";
+      }}
+    }}
+
+    function adicionarAoLog(jog, lance, props, ehHumano) {{
+      const logBox = document.getElementById("log-content");
+      if (historicoPartida.length === 1) logBox.innerHTML = "";
+
+      const item = document.createElement("div");
+      item.className = "log-item";
+
+      const nomeJog = jog === 1 ? "Alice" : "Bob";
+      const quem = ehHumano ? "(Você)" : "(IA)";
+      const propsTxt = props.length > 0 ? ` [propagou: ${{props.map(p => grafoAtual.rotulos[p]).join(", ")}}]` : "";
+
+      item.innerHTML = `
+        <span><strong>T${{historicoPartida.length}}</strong> ${{nomeJog}} ${{quem}}: <strong>${{grafoAtual.rotulos[lance]}}</strong>${{propsTxt}}</span>
+        <span style="color: var(--text-muted); font-size: 0.8rem;">${{new Date().toLocaleTimeString().slice(3)}}</span>
+      `;
+      logBox.prepend(item);
+    }}
+
+    function mostrarDicaMinimax() {{
+      const n = grafoAtual.n;
+      let vencedoras = [];
+      for (let u = 0; u < n; u++) {{
+        if (!((S_atual >> u) & 1)) {{
+          let prox = fechoP3(grafoAtual.adj, S_atual | (1 << u)).fecho;
+          let val = valorMinimax(grafoAtual.adj, prox, -jogadorAtual);
+          if (val === jogadorAtual) vencedoras.push(u);
+        }}
+      }}
+
+      dicasAtivas.clear();
+      const banner = document.getElementById("banner-status");
+      if (vencedoras.length > 0) {{
+        vencedoras.forEach(v => dicasAtivas.add(v));
+        banner.className = "banner-status";
+        banner.innerHTML = `💡 <strong>Dica Minimax:</strong> Jogada(s) com vitória garantida: <strong>${{vencedoras.map(v => grafoAtual.rotulos[v]).join(", ")}}</strong> (em verde)`;
+      }} else {{
+        banner.className = "banner-status";
+        banner.innerHTML = "💡 <strong>Dica Minimax:</strong> A IA tem vitória forçada sob jogo perfeito, mas jogue mantendo o controle da espinha!";
+      }}
+      renderizarTabuleiro();
+    }}
+
+    function desfazerLance() {{
+      if (historicoPartida.length === 0 || bloqueado) return;
+
+      // Desfaz até a última jogada do humano
+      if (historicoPartida.length >= 2 && !historicoPartida[historicoPartida.length - 1].ehHumano) {{
+        historicoPartida.pop(); // desfaz IA
+        const h = historicoPartida.pop(); // desfaz humano
+        S_atual = h.S_anterior;
+        jogadorAtual = h.jogador;
+      }} else {{
+        const h = historicoPartida.pop();
+        S_atual = h.S_anterior;
+        jogadorAtual = h.jogador;
+      }}
+
+      dicasAtivas.clear();
+      bloqueado = false;
+      document.getElementById("banner-status").className = "banner-status";
+      document.getElementById("banner-status").innerHTML = "Jogada desfeita. Escolha seu próximo lance.";
+      renderizarTabuleiro();
+    }}
+
+    function construirCaterpillarPorAssinatura(L) {{
+      const k = L.length;
+      let totalPernas = L.reduce((a, b) => a + b, 0);
+      let n = k + totalPernas;
+
+      let adj = Array.from({{ length: n }}, () => []);
+      let rotulos = Array.from({{ length: n }}, (_, i) => `v${{i + 1}}`);
+      let paiDaPerna = {{}};
+
+      for (let i = 0; i < k - 1; i++) {{
+        adj[i].push(i + 1);
+        adj[i + 1].push(i);
+      }}
+
+      let prox = k;
+      for (let i = 0; i < k; i++) {{
+        for (let p = 0; p < L[i]; p++) {{
+          adj[i].push(prox);
+          adj[prox].push(i);
+          paiDaPerna[prox] = i;
+          prox++;
+        }}
+      }}
+
+      // Coordenadas
+      let pos = {{}};
+      let espacamento = 1.8;
+      for (let i = 0; i < k; i++) pos[i] = {{ x: i * espacamento, y: 0.0 }};
+
+      let pernasPorPai = Array.from({{ length: k }}, () => []);
+      for (let [perna, pai] of Object.entries(paiDaPerna)) {{
+        pernasPorPai[pai].push(parseInt(perna));
+      }}
+
+      for (let i = 0; i < k; i++) {{
+        let pernas = pernasPorPai[i];
+        let qtd = pernas.length;
+        if (qtd === 1) {{
+          pos[pernas[0]] = {{ x: pos[i].x, y: 1.2 }};
+        }} else if (qtd === 2) {{
+          pos[pernas[0]] = {{ x: pos[i].x, y: 1.2 }};
+          pos[pernas[1]] = {{ x: pos[i].x, y: -1.2 }};
+        }} else if (qtd > 2) {{
+          let mc = Math.ceil(qtd / 2);
+          let mb = qtd - mc;
+          for (let idx = 0; idx < mc; idx++) pos[pernas[idx]] = {{ x: pos[i].x - 0.3 + idx * 0.6, y: 1.2 }};
+          for (let idx = 0; idx < mb; idx++) pos[pernas[mc + idx]] = {{ x: pos[i].x - 0.3 + idx * 0.6, y: -1.2 }};
+        }}
+      }}
+
+      let xs = Object.values(pos).map(p => p.x);
+      let ys = Object.values(pos).map(p => p.y);
+      let min_x = Math.min(...xs), max_x = Math.max(...xs);
+      let min_y = Math.min(...ys), max_y = Math.max(...ys);
+      let dx = max_x > min_x ? max_x - min_x : 1;
+      let dy = max_y > min_y ? max_y - min_y : 1;
+
+      let nos_svg = [];
+      let largura_svg = 950, altura_svg = 420, margem = 60;
+      for (let v = 0; v < n; v++) {{
+        let p = pos[v];
+        nos_svg.push({{
+          id: v,
+          rotulo: rotulos[v],
+          x: Math.round(margem + ((p.x - min_x) / dx) * (largura_svg - 2 * margem)),
+          y: Math.round(altura_svg - (margem + ((p.y - min_y) / dy) * (altura_svg - 2 * margem))),
+          eh_espinha: v < k
+        }});
+      }}
+
+      let arestas_svg = [];
+      for (let u = 0; u < n; u++) {{
+        for (let v of adj[u]) {{
+          if (u < v) arestas_svg.push({{ u, v }});
+        }}
+      }}
+
+      return {{ L, n, k, adj, rotulos, nos: nos_svg, arestas: arestas_svg }};
+    }}
+
+    function trocarGrafo(strAssinatura) {{
+      const L = strAssinatura.split(",").map(x => parseInt(x.trim()));
+      grafoAtual = construirCaterpillarPorAssinatura(L);
+      cacheMinimax.clear();
+      reiniciarJogo();
+    }}
+
+    function reiniciarJogo() {{
+      S_atual = 0;
+      jogadorAtual = 1;
+      historicoPartida = [];
+      dicasAtivas.clear();
+      bloqueado = false;
+      cacheMinimax.clear();
+
+      document.getElementById("log-content").innerHTML = '<div style="color: var(--text-muted); font-style: italic;">Aguardando lance inicial...</div>';
+      document.getElementById("info-ultimo-lance").textContent = "Nenhum";
+      document.getElementById("info-props").textContent = "0 nós";
+
+      const humanoEhAlice = document.getElementById("select-lado").value === "alice";
+      if (!humanoEhAlice) {{
+        // IA começa jogando como Alice
+        bloqueado = true;
+        document.getElementById("banner-status").className = "banner-status";
+        document.getElementById("banner-status").innerHTML = "🤖 A IA joga como Alice (1º lance)... Pensando...";
+        renderizarTabuleiro();
+
+        setTimeout(() => {{
+          const modoCasual = document.getElementById("select-ia").value === "casual";
+          const lanceIA = obterMelhorJogadaIA(grafoAtual.adj, S_atual, 1, modoCasual);
+          bloqueado = false;
+          executarLance(lanceIA, false);
+        }}, 600);
+      }} else {{
+        document.getElementById("banner-status").className = "banner-status";
+        document.getElementById("banner-status").innerHTML = "Sua vez! Você joga como Alice (1º lance). Clique em um nó para infectá-lo.";
+        renderizarTabuleiro();
+      }}
+    }}
+
+    // Inicia jogo ao carregar
+    renderizarTabuleiro();
+  </script>
+</body>
+</html>
+"""
+
+    os.makedirs(os.path.dirname(caminho_html), exist_ok=True)
+    with open(caminho_html, "w", encoding="utf-8") as f:
+        f.write(html_template)
+
+    return caminho_html
+

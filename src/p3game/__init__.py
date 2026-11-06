@@ -39,5 +39,7 @@ from .visualizacao import (
     gerar_painel_estatico,
     abrir_visualizador_interativo,
     gerar_html_interativo,
+    gerar_interface_jogavel_html,
+    jogar_contra_ia_terminal,
 )
 
