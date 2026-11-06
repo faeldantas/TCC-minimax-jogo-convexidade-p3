@@ -25,5 +25,11 @@ def resolver_caterpillar(L, **opcoes) -> tuple[int, Minimax]:
     return solver.resolver(), solver
 
 
-from .experimentos import analisar_uniforme_expansao, executar_experimento_uniformes_espinha
+from .experimentos import (
+    analisar_uniforme_expansao,
+    executar_experimento_uniformes_espinha,
+    assinatura_caterpillar_cheio,
+    analisar_caterpillar_cheio_2_pernas,
+    salvar_resultados_caterpillar_cheio,
+)
 

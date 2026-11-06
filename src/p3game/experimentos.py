@@ -333,6 +333,123 @@ def executar_experimento_uniformes_espinha(
     return registros
 
 
+def assinatura_caterpillar_cheio(m: int, modo: str = "todos") -> tuple[int, ...]:
+    """
+    Gera a assinatura de um caterpillar com 2 pernas em nós da espinha.
+    - modo='todos': (2,) * m  -> Todos os m nós da espinha recebem 2 pernas (n = 3*m)
+    - modo='diametral': (0,) + (2,) * m + (0,) -> Espinha diametral canônica com m internos (n = 3*m + 2)
+    """
+    if modo == "diametral":
+        return (0,) + (2,) * m + (0,)
+    return (2,) * m
+
+
+def analisar_caterpillar_cheio_2_pernas(
+    m: int,
+    modo: str = "todos",
+    id_inst: int = 1,
+    limite_nos: int | None = None,
+) -> dict:
+    """
+    Analisa um caterpillar com 2 pernas em nós da espinha de tamanho m.
+    Alice sempre começa jogando (jogador MAX = +1).
+    """
+    L = assinatura_caterpillar_cheio(m, modo=modo)
+    cat = Caterpillar(L)
+
+    t0 = time.perf_counter()
+    v, solver = resolver_caterpillar(
+        L,
+        corte=True,
+        memoizacao=True,
+        simetria=True,
+        limite_nos=limite_nos,
+    )
+    tempo_total_s = time.perf_counter() - t0
+
+    pv = solver.variacao_principal()
+    jogadas_alice = sum(1 for passo in pv if passo["jogador"] == "Alice")
+    jogadas_bob = sum(1 for passo in pv if passo["jogador"] == "Bob")
+    total_turnos = len(pv)
+    propagados_total = cat.n - total_turnos
+    taxa_propagacao = round((propagados_total / cat.n) * 100.0, 2)
+
+    venc_alice_idx = solver.jogadas_vencedoras() if v == 1 else []
+    jogadas_venc_alice = [cat.rotulos[j] for j in venc_alice_idx]
+
+    total_hits = solver.stats.acertos_tabela
+    total_nos = solver.stats.nos_visitados
+    taxa_hits = round((total_hits / max(1, total_nos)) * 100.0, 2)
+
+    trilha_str = " -> ".join(
+        f"{passo['jogador'][0]}({passo['jogada']})"
+        + (f"+{passo['propagados']}" if passo["propagados"] else "")
+        for passo in pv
+    )
+
+    folhas_totais = len(cat.folhas)
+
+    return {
+        "id": id_inst,
+        "m_espinha": m,
+        "modo": modo,
+        "k_espinha": cat.k,
+        "n_vertices": cat.n,
+        "folhas_totais": folhas_totais,
+        "paridade_folhas": "Par" if folhas_totais % 2 == 0 else "Impar",
+        "assinatura": str(list(L)),
+        "solucao_otima_encontrada": True,
+        "utilidade": v,
+        "vencedor_otimo": "Alice" if v == 1 else "Bob",
+        "jogadas_alice": jogadas_alice,
+        "jogadas_bob": jogadas_bob,
+        "total_turnos": total_turnos,
+        "vertices_propagados": propagados_total,
+        "taxa_propagacao_perc": taxa_propagacao,
+        "tempo_ms": round(tempo_total_s * 1000.0, 3),
+        "tempo_s": round(tempo_total_s, 4),
+        "nos_visitados": total_nos,
+        "estados_tabela": solver.stats.entradas_tabela,
+        "hits_tabela": total_hits,
+        "taxa_hits_perc": taxa_hits,
+        "qtd_jogadas_venc_alice": len(jogadas_venc_alice),
+        "jogadas_vencedoras_iniciais_alice": ", ".join(jogadas_venc_alice) if jogadas_venc_alice else "--- (Bob vence)",
+        "variacao_principal": pv,
+        "trilha_otima": trilha_str,
+    }
+
+
+def salvar_resultados_caterpillar_cheio(
+    registros: list[dict],
+    pasta_resultados: str | None = None,
+) -> tuple[str, str]:
+    """Salva os resultados do experimento de caterpillar cheio com 2 pernas em CSV e JSON."""
+    raiz = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    pasta_res = pasta_resultados or os.path.join(raiz, "resultados")
+    os.makedirs(pasta_res, exist_ok=True)
+
+    caminho_csv = os.path.join(pasta_res, "experimento_caterpillar_cheio_2_pernas.csv")
+    campos = [
+        "id", "m_espinha", "modo", "k_espinha", "n_vertices", "folhas_totais", "paridade_folhas",
+        "assinatura", "solucao_otima_encontrada", "utilidade", "vencedor_otimo",
+        "jogadas_alice", "jogadas_bob", "total_turnos", "vertices_propagados",
+        "taxa_propagacao_perc", "tempo_ms", "tempo_s", "nos_visitados", "estados_tabela",
+        "hits_tabela", "taxa_hits_perc", "qtd_jogadas_venc_alice",
+        "jogadas_vencedoras_iniciais_alice", "trilha_otima"
+    ]
+    with open(caminho_csv, "w", newline="", encoding="utf-8-sig") as f:
+        w = csv.DictWriter(f, fieldnames=campos, delimiter=";")
+        w.writeheader()
+        for r in registros:
+            w.writerow({k: r[k] for k in campos})
+
+    caminho_json = os.path.join(pasta_res, "experimento_caterpillar_cheio_2_pernas.json")
+    with open(caminho_json, "w", encoding="utf-8") as f:
+        json.dump(registros, f, ensure_ascii=False, indent=2)
+
+    return caminho_csv, caminho_json
+
+
 def executar_tudo():
     raiz = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     pasta_res = os.path.join(raiz, "resultados")

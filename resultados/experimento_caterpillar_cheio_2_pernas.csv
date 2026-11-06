@@ -1,0 +1,6 @@
+﻿id;m_espinha;modo;k_espinha;n_vertices;folhas_totais;paridade_folhas;assinatura;solucao_otima_encontrada;utilidade;vencedor_otimo;jogadas_alice;jogadas_bob;total_turnos;vertices_propagados;taxa_propagacao_perc;tempo_ms;tempo_s;nos_visitados;estados_tabela;hits_tabela;taxa_hits_perc;qtd_jogadas_venc_alice;jogadas_vencedoras_iniciais_alice;trilha_otima
+1;1;todos;1;3;2;Par;[2];True;1;Alice;2;1;3;0;0.0;0.115;0.0001;13;5;8;61.54;1;v1;A(v1) -> B(v2) -> A(v3)
+2;2;todos;2;6;4;Par;[2, 2];True;1;Alice;3;2;5;1;16.67;0.225;0.0002;38;12;26;68.42;4;v3, v4, v5, v6;A(v3) -> B(v1) -> A(v5)+['v2'] -> B(v4) -> A(v6)
+3;3;todos;3;9;6;Par;[2, 2, 2];True;1;Alice;5;4;9;0;0.0;1.064;0.0011;101;36;65;64.36;1;v2;A(v2) -> B(v1) -> A(v3) -> B(v4) -> A(v5) -> B(v6) -> A(v7) -> B(v8) -> A(v9)
+4;4;todos;4;12;8;Par;[2, 2, 2, 2];True;-1;Bob;5;5;10;2;16.67;3.113;0.0031;211;80;131;62.09;0;--- (Bob vence);A(v1) -> B(v7)+['v2'] -> A(v3) -> B(v11)+['v4'] -> A(v5) -> B(v6) -> A(v8) -> B(v9) -> A(v10) -> B(v12)
+5;5;todos;5;15;10;Par;[2, 2, 2, 2, 2];True;1;Alice;7;6;13;2;13.33;12.962;0.013;996;352;644;64.66;1;v3;A(v3) -> B(v1)+['v2'] -> A(v5)+['v4'] -> B(v6) -> A(v7) -> B(v8) -> A(v9) -> B(v10) -> A(v11) -> B(v12) -> A(v13) -> B(v14) -> A(v15)

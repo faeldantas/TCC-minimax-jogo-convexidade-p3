@@ -1,0 +1,397 @@
+[
+  {
+    "id": 1,
+    "m_espinha": 1,
+    "modo": "todos",
+    "k_espinha": 1,
+    "n_vertices": 3,
+    "folhas_totais": 2,
+    "paridade_folhas": "Par",
+    "assinatura": "[2]",
+    "solucao_otima_encontrada": true,
+    "utilidade": 1,
+    "vencedor_otimo": "Alice",
+    "jogadas_alice": 2,
+    "jogadas_bob": 1,
+    "total_turnos": 3,
+    "vertices_propagados": 0,
+    "taxa_propagacao_perc": 0.0,
+    "tempo_ms": 0.115,
+    "tempo_s": 0.0001,
+    "nos_visitados": 13,
+    "estados_tabela": 5,
+    "hits_tabela": 8,
+    "taxa_hits_perc": 61.54,
+    "qtd_jogadas_venc_alice": 1,
+    "jogadas_vencedoras_iniciais_alice": "v1",
+    "variacao_principal": [
+      {
+        "turno": 1,
+        "jogador": "Alice",
+        "jogada": "v1",
+        "propagados": []
+      },
+      {
+        "turno": 2,
+        "jogador": "Bob",
+        "jogada": "v2",
+        "propagados": []
+      },
+      {
+        "turno": 3,
+        "jogador": "Alice",
+        "jogada": "v3",
+        "propagados": []
+      }
+    ],
+    "trilha_otima": "A(v1) -> B(v2) -> A(v3)"
+  },
+  {
+    "id": 2,
+    "m_espinha": 2,
+    "modo": "todos",
+    "k_espinha": 2,
+    "n_vertices": 6,
+    "folhas_totais": 4,
+    "paridade_folhas": "Par",
+    "assinatura": "[2, 2]",
+    "solucao_otima_encontrada": true,
+    "utilidade": 1,
+    "vencedor_otimo": "Alice",
+    "jogadas_alice": 3,
+    "jogadas_bob": 2,
+    "total_turnos": 5,
+    "vertices_propagados": 1,
+    "taxa_propagacao_perc": 16.67,
+    "tempo_ms": 0.225,
+    "tempo_s": 0.0002,
+    "nos_visitados": 38,
+    "estados_tabela": 12,
+    "hits_tabela": 26,
+    "taxa_hits_perc": 68.42,
+    "qtd_jogadas_venc_alice": 4,
+    "jogadas_vencedoras_iniciais_alice": "v3, v4, v5, v6",
+    "variacao_principal": [
+      {
+        "turno": 1,
+        "jogador": "Alice",
+        "jogada": "v3",
+        "propagados": []
+      },
+      {
+        "turno": 2,
+        "jogador": "Bob",
+        "jogada": "v1",
+        "propagados": []
+      },
+      {
+        "turno": 3,
+        "jogador": "Alice",
+        "jogada": "v5",
+        "propagados": [
+          "v2"
+        ]
+      },
+      {
+        "turno": 4,
+        "jogador": "Bob",
+        "jogada": "v4",
+        "propagados": []
+      },
+      {
+        "turno": 5,
+        "jogador": "Alice",
+        "jogada": "v6",
+        "propagados": []
+      }
+    ],
+    "trilha_otima": "A(v3) -> B(v1) -> A(v5)+['v2'] -> B(v4) -> A(v6)"
+  },
+  {
+    "id": 3,
+    "m_espinha": 3,
+    "modo": "todos",
+    "k_espinha": 3,
+    "n_vertices": 9,
+    "folhas_totais": 6,
+    "paridade_folhas": "Par",
+    "assinatura": "[2, 2, 2]",
+    "solucao_otima_encontrada": true,
+    "utilidade": 1,
+    "vencedor_otimo": "Alice",
+    "jogadas_alice": 5,
+    "jogadas_bob": 4,
+    "total_turnos": 9,
+    "vertices_propagados": 0,
+    "taxa_propagacao_perc": 0.0,
+    "tempo_ms": 1.064,
+    "tempo_s": 0.0011,
+    "nos_visitados": 101,
+    "estados_tabela": 36,
+    "hits_tabela": 65,
+    "taxa_hits_perc": 64.36,
+    "qtd_jogadas_venc_alice": 1,
+    "jogadas_vencedoras_iniciais_alice": "v2",
+    "variacao_principal": [
+      {
+        "turno": 1,
+        "jogador": "Alice",
+        "jogada": "v2",
+        "propagados": []
+      },
+      {
+        "turno": 2,
+        "jogador": "Bob",
+        "jogada": "v1",
+        "propagados": []
+      },
+      {
+        "turno": 3,
+        "jogador": "Alice",
+        "jogada": "v3",
+        "propagados": []
+      },
+      {
+        "turno": 4,
+        "jogador": "Bob",
+        "jogada": "v4",
+        "propagados": []
+      },
+      {
+        "turno": 5,
+        "jogador": "Alice",
+        "jogada": "v5",
+        "propagados": []
+      },
+      {
+        "turno": 6,
+        "jogador": "Bob",
+        "jogada": "v6",
+        "propagados": []
+      },
+      {
+        "turno": 7,
+        "jogador": "Alice",
+        "jogada": "v7",
+        "propagados": []
+      },
+      {
+        "turno": 8,
+        "jogador": "Bob",
+        "jogada": "v8",
+        "propagados": []
+      },
+      {
+        "turno": 9,
+        "jogador": "Alice",
+        "jogada": "v9",
+        "propagados": []
+      }
+    ],
+    "trilha_otima": "A(v2) -> B(v1) -> A(v3) -> B(v4) -> A(v5) -> B(v6) -> A(v7) -> B(v8) -> A(v9)"
+  },
+  {
+    "id": 4,
+    "m_espinha": 4,
+    "modo": "todos",
+    "k_espinha": 4,
+    "n_vertices": 12,
+    "folhas_totais": 8,
+    "paridade_folhas": "Par",
+    "assinatura": "[2, 2, 2, 2]",
+    "solucao_otima_encontrada": true,
+    "utilidade": -1,
+    "vencedor_otimo": "Bob",
+    "jogadas_alice": 5,
+    "jogadas_bob": 5,
+    "total_turnos": 10,
+    "vertices_propagados": 2,
+    "taxa_propagacao_perc": 16.67,
+    "tempo_ms": 3.113,
+    "tempo_s": 0.0031,
+    "nos_visitados": 211,
+    "estados_tabela": 80,
+    "hits_tabela": 131,
+    "taxa_hits_perc": 62.09,
+    "qtd_jogadas_venc_alice": 0,
+    "jogadas_vencedoras_iniciais_alice": "--- (Bob vence)",
+    "variacao_principal": [
+      {
+        "turno": 1,
+        "jogador": "Alice",
+        "jogada": "v1",
+        "propagados": []
+      },
+      {
+        "turno": 2,
+        "jogador": "Bob",
+        "jogada": "v7",
+        "propagados": [
+          "v2"
+        ]
+      },
+      {
+        "turno": 3,
+        "jogador": "Alice",
+        "jogada": "v3",
+        "propagados": []
+      },
+      {
+        "turno": 4,
+        "jogador": "Bob",
+        "jogada": "v11",
+        "propagados": [
+          "v4"
+        ]
+      },
+      {
+        "turno": 5,
+        "jogador": "Alice",
+        "jogada": "v5",
+        "propagados": []
+      },
+      {
+        "turno": 6,
+        "jogador": "Bob",
+        "jogada": "v6",
+        "propagados": []
+      },
+      {
+        "turno": 7,
+        "jogador": "Alice",
+        "jogada": "v8",
+        "propagados": []
+      },
+      {
+        "turno": 8,
+        "jogador": "Bob",
+        "jogada": "v9",
+        "propagados": []
+      },
+      {
+        "turno": 9,
+        "jogador": "Alice",
+        "jogada": "v10",
+        "propagados": []
+      },
+      {
+        "turno": 10,
+        "jogador": "Bob",
+        "jogada": "v12",
+        "propagados": []
+      }
+    ],
+    "trilha_otima": "A(v1) -> B(v7)+['v2'] -> A(v3) -> B(v11)+['v4'] -> A(v5) -> B(v6) -> A(v8) -> B(v9) -> A(v10) -> B(v12)"
+  },
+  {
+    "id": 5,
+    "m_espinha": 5,
+    "modo": "todos",
+    "k_espinha": 5,
+    "n_vertices": 15,
+    "folhas_totais": 10,
+    "paridade_folhas": "Par",
+    "assinatura": "[2, 2, 2, 2, 2]",
+    "solucao_otima_encontrada": true,
+    "utilidade": 1,
+    "vencedor_otimo": "Alice",
+    "jogadas_alice": 7,
+    "jogadas_bob": 6,
+    "total_turnos": 13,
+    "vertices_propagados": 2,
+    "taxa_propagacao_perc": 13.33,
+    "tempo_ms": 12.962,
+    "tempo_s": 0.013,
+    "nos_visitados": 996,
+    "estados_tabela": 352,
+    "hits_tabela": 644,
+    "taxa_hits_perc": 64.66,
+    "qtd_jogadas_venc_alice": 1,
+    "jogadas_vencedoras_iniciais_alice": "v3",
+    "variacao_principal": [
+      {
+        "turno": 1,
+        "jogador": "Alice",
+        "jogada": "v3",
+        "propagados": []
+      },
+      {
+        "turno": 2,
+        "jogador": "Bob",
+        "jogada": "v1",
+        "propagados": [
+          "v2"
+        ]
+      },
+      {
+        "turno": 3,
+        "jogador": "Alice",
+        "jogada": "v5",
+        "propagados": [
+          "v4"
+        ]
+      },
+      {
+        "turno": 4,
+        "jogador": "Bob",
+        "jogada": "v6",
+        "propagados": []
+      },
+      {
+        "turno": 5,
+        "jogador": "Alice",
+        "jogada": "v7",
+        "propagados": []
+      },
+      {
+        "turno": 6,
+        "jogador": "Bob",
+        "jogada": "v8",
+        "propagados": []
+      },
+      {
+        "turno": 7,
+        "jogador": "Alice",
+        "jogada": "v9",
+        "propagados": []
+      },
+      {
+        "turno": 8,
+        "jogador": "Bob",
+        "jogada": "v10",
+        "propagados": []
+      },
+      {
+        "turno": 9,
+        "jogador": "Alice",
+        "jogada": "v11",
+        "propagados": []
+      },
+      {
+        "turno": 10,
+        "jogador": "Bob",
+        "jogada": "v12",
+        "propagados": []
+      },
+      {
+        "turno": 11,
+        "jogador": "Alice",
+        "jogada": "v13",
+        "propagados": []
+      },
+      {
+        "turno": 12,
+        "jogador": "Bob",
+        "jogada": "v14",
+        "propagados": []
+      },
+      {
+        "turno": 13,
+        "jogador": "Alice",
+        "jogada": "v15",
+        "propagados": []
+      }
+    ],
+    "trilha_otima": "A(v3) -> B(v1)+['v2'] -> A(v5)+['v4'] -> B(v6) -> A(v7) -> B(v8) -> A(v9) -> B(v10) -> A(v11) -> B(v12) -> A(v13) -> B(v14) -> A(v15)"
+  }
+]

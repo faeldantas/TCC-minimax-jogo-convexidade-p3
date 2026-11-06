@@ -1,11 +1,13 @@
 """
 Ponto de entrada principal (CLI) do pacote `p3game`.
-Executa a análise focada na expansão da espinha diametral para grafos
-caterpillar uniformes C(m, p).
 
-Verifica se o Minimax encontra a solução ótima, computa os tempos de cálculo,
-quantidades de jogadas de Alice e Bob (com Alice iniciando), vértices
-propagados pela convexidade P_3 e métricas de desempenho.
+Executa a análise interativa e iterativa para caterpillars cheios com
+duas pernas em todos os nós da espinha, expandindo o tamanho da espinha
+em loop (limite máximo padrão: m <= 100).
+
+O usuário decide quando parar a execução pressionando [Ctrl + C] a qualquer momento.
+Ao interromper, o script resume todos os tamanhos testados e salva automaticamente
+os dados gerados em arquivos CSV e JSON.
 """
 
 from __future__ import annotations
@@ -13,162 +15,197 @@ from __future__ import annotations
 import argparse
 import os
 import sys
+import time
 
 # Garante importação do pacote p3game
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+from p3game.minimax import LimiteDeNosExcedido
 from p3game.experimentos import (
-    analisar_uniforme_expansao,
-    executar_experimento_uniformes_espinha,
+    analisar_caterpillar_cheio_2_pernas,
+    salvar_resultados_caterpillar_cheio,
 )
 
 
-def formatar_tabela(registros: list[dict]) -> None:
-    """Imprime uma tabela visualmente alinhada no terminal com as métricas do experimento."""
+def formatar_cabecalho_tabela() -> str:
     cabecalho = (
-        f"{'m':>2} | {'k':>2} | {'n':>3} | {'Folhas':>6} | "
-        f"{'Vencedor':^10} | {'Alice':^5} | {'Bob':^5} | {'Turnos':^6} | "
-        f"{'Propagados':^10} | {'Tempo (ms)':^10} | {'Nós Minimax':^11} | {'Hits (%)':^8} | "
+        f"{'m':>3} | {'n':>3} | {'Folhas':>6} | "
+        f"{'Solução Ótima':^13} | {'Alice':^5} | {'Bob':^5} | {'Turnos':^6} | "
+        f"{'Propagados':^10} | {'Tempo':^11} | {'Nós Minimax':^11} | {'Hits (%)':^8} | "
         f"{'1ª Jogada Vencedora (Alice)':<26}"
     )
     linha_div = "-" * len(cabecalho)
-
-    p_atual = None
-    for r in registros:
-        if r["p"] != p_atual:
-            p_atual = r["p"]
-            print(f"\nSubfamília C(m, p={p_atual}) -- Espinha com m vértices internos e {p_atual} perna(s) cada:")
-            print(linha_div)
-            print(cabecalho)
-            print(linha_div)
-
-        venc_cor = r["vencedor_otimo"]
-        primeira_jogada = (
-            r["jogadas_vencedoras_iniciais_alice"]
-            if r["vencedor_otimo"] == "Alice"
-            else "--- (Bob vence forçado)"
-        )
-
-        print(
-            f"{r['m']:2d} | {r['k_espinha']:2d} | {r['n_vertices']:3d} | "
-            f"{r['folhas_totais']:2d} ({r['paridade_folhas'][0]}) | "
-            f"{venc_cor:^10} | {r['jogadas_alice']:5d} | {r['jogadas_bob']:5d} | {r['total_turnos']:6d} | "
-            f"{r['vertices_propagados']:2d} ({r['taxa_propagacao_perc']:4.1f}%) | "
-            f"{r['tempo_ms']:10.2f} | {r['nos_visitados']:11d} | {r['taxa_hits_perc']:7.1f}% | "
-            f"{primeira_jogada:<26}"
-        )
-    print(linha_div)
+    return f"{linha_div}\n{cabecalho}\n{linha_div}"
 
 
-def imprimir_variacao_principal(registros: list[dict]) -> None:
-    """Exibe o rastro passo a passo sob jogo ótimo para cada instância testada."""
-    print("\n" + "=" * 90)
-    print("VARIAÇÃO PRINCIPAL SOB JOGO ÓTIMO (Passo a passo com propagação P_3)")
-    print("=" * 90)
-    for r in registros:
-        print(f"\n[C(m={r['m']}, p={r['p']}) | n={r['n_vertices']} | Vencedor: {r['vencedor_otimo']}]")
-        print(f"  Assinatura Canônica: {r['assinatura']}")
-        print(f"  Turnos: {r['total_turnos']} (Alice={r['jogadas_alice']}, Bob={r['jogadas_bob']}) | Propagados: {r['vertices_propagados']}")
-        print(f"  Trilha Completa: {r['trilha_otima']}")
+def formatar_linha_tabela(r: dict) -> str:
+    venc_str = f"{r['vencedor_otimo']} ({r['utilidade']:+d})"
+    primeira_jogada = (
+        r["jogadas_vencedoras_iniciais_alice"]
+        if r["vencedor_otimo"] == "Alice"
+        else "--- (Bob vence forçado)"
+    )
+
+    # Formata tempo de forma amigável (ms se < 1000, ou s se >= 1000)
+    if r["tempo_ms"] < 1000.0:
+        tempo_str = f"{r['tempo_ms']:7.2f} ms"
+    else:
+        tempo_str = f"{r['tempo_s']:7.2f} s "
+
+    return (
+        f"{r['m_espinha']:3d} | {r['n_vertices']:3d} | "
+        f"{r['folhas_totais']:2d} ({r['paridade_folhas'][0]}) | "
+        f"{venc_str:^13} | {r['jogadas_alice']:5d} | {r['jogadas_bob']:5d} | {r['total_turnos']:6d} | "
+        f"{r['vertices_propagados']:2d} ({r['taxa_propagacao_perc']:4.1f}%) | "
+        f"{tempo_str:^11} | {r['nos_visitados']:11d} | {r['taxa_hits_perc']:7.1f}% | "
+        f"{primeira_jogada:<26}"
+    )
 
 
-def imprimir_relatorio_analitico(registros: list[dict]) -> None:
-    """Gera um resumo estatístico e analítico da abordagem."""
-    total_instancias = len(registros)
+def imprimir_detalhe_instancia(r: dict) -> None:
+    print(f"    Assinatura: {r['assinatura']}")
+    print(f"    Trilha Ótima: {r['trilha_otima']}")
+
+
+def imprimir_sintese_final(registros: list[dict], interrompido: bool = False) -> None:
+    total = len(registros)
+    if total == 0:
+        return
+
     vitorias_alice = sum(1 for r in registros if r["vencedor_otimo"] == "Alice")
     vitorias_bob = sum(1 for r in registros if r["vencedor_otimo"] == "Bob")
-    tempo_total = sum(r["tempo_ms"] for r in registros)
-    nos_total = sum(r["nos_visitados"] for r in registros)
-    total_propagados = sum(r["vertices_propagados"] for r in registros)
-    total_vertices = sum(r["n_vertices"] for r in registros)
+    tempo_total_s = sum(r["tempo_s"] for r in registros)
+    total_nos = sum(r["nos_visitados"] for r in registros)
+    total_prop = sum(r["vertices_propagados"] for r in registros)
+    total_vert = sum(r["n_vertices"] for r in registros)
 
-    print("\n" + "=" * 90)
-    print("SÍNTESE ANALÍTICA DA ABORDAGEM MINIMAX")
-    print("=" * 90)
-    print(f"1. Solubilidade Ótima:")
-    print(f"   - O algoritmo Minimax encontrou solução ótima exata em 100% das instâncias ({total_instancias}/{total_instancias}).")
-    print(f"   - Vitórias de Alice (inicia jogando): {vitorias_alice} ({100 * vitorias_alice / total_instancias:.1f}%)")
-    print(f"   - Vitórias de Bob (segundo a jogar):  {vitorias_bob} ({100 * vitorias_bob / total_instancias:.1f}%)")
+    print("\n" + "=" * 95)
+    print("SÍNTESE ANALÍTICA DO EXPERIMENTO" + (" (INTERROMPIDO PELO USUÁRIO)" if interrompido else " (CONCLUÍDO)"))
+    print("=" * 95)
+    print(f"1. Solubilidade Ótima e Resultados:")
+    print(f"   - Tamanhos de espinha avaliados: m = {registros[0]['m_espinha']} até m = {registros[-1]['m_espinha']} (Total: {total} instâncias)")
+    print(f"   - Soluções ótimas provadas pelo Minimax: 100% ({total}/{total})")
+    print(f"   - Vitórias de Alice (inicia): {vitorias_alice} ({100 * vitorias_alice / total:.1f}%)")
+    print(f"   - Vitórias de Bob (2º a jogar): {vitorias_bob} ({100 * vitorias_bob / total:.1f}%)")
 
-    print(f"\n2. Paridade de Jogadas (Convenção Normal):")
-    print(f"   - Quando Alice vence, o total de turnos é ÍMPAR e Alice joga exatamente 1 turno a mais que Bob (J_Alice = J_Bob + 1).")
-    print(f"   - Quando Bob vence, o total de turnos é PAR e ambos jogam a mesma quantidade de turnos (J_Alice = J_Bob).")
+    print(f"\n2. Paridade e Quantidade de Jogadas (Alice vs Bob):")
+    print(f"   - Vitórias de Alice: Total de turnos sempre ÍMPAR (J_Alice = J_Bob + 1).")
+    print(f"   - Vitórias de Bob:   Total de turnos sempre PAR   (J_Alice = J_Bob).")
 
-    print(f"\n3. Impacto da Convexidade P_3 (Efeito Cascata):")
-    perc_prop = (total_propagados / total_vertices) * 100.0 if total_vertices > 0 else 0
-    print(f"   - Do total de {total_vertices} vértices gerados nas partidas, {total_propagados} ({perc_prop:.1f}%) foram")
-    print(f"     infectados gratuitamente por propagação de fecho P_3, sem consumir turnos dos jogadores.")
+    print(f"\n3. Fecho Convexo P_3 (Efeito Cascata):")
+    perc_prop = (total_prop / total_vert) * 100.0 if total_vert > 0 else 0
+    print(f"   - Total de vértices nas árvores: {total_vert}")
+    print(f"   - Vértices propagados por fecho P_3: {total_prop} ({perc_prop:.1f}% dos vértices infectados sem consumir lances)")
 
-    print(f"\n4. Desempenho e Eficiência do Algoritmo:")
-    print(f"   - Tempo total acumulado: {tempo_total:.2f} ms ({tempo_total / 1000:.3f} s)")
-    print(f"   - Média de nós expandidos por instância: {nos_total / total_instancias:.1f} nós")
-    print(f"   - A combinação de Poda Alfa-Beta (curto-circuito booleano) + Tabela de Transposição + Simetria")
-    print(f"     permite resolver caterpillars com até n=26 vértices em poucos segundos de CPU.")
-    print("=" * 90)
+    print(f"\n4. Métricas de Desempenho e Eficiência:")
+    print(f"   - Tempo total acumulado de processamento: {tempo_total_s:.3f} s")
+    print(f"   - Média de nós Minimax visitados por instância: {total_nos / total:.1f} nós")
+    print(f"   - Poda Alfa-Beta por curto-circuito + Memoização canônica garantem solução exata.")
+    print("=" * 95)
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Experimento Minimax: Expansão da Espinha em Caterpillars Uniformes C(m, p)."
-    )
-    parser.add_argument(
-        "--p",
-        type=str,
-        default="1,2",
-        help="Valores de p (número uniforme de pernas por vértice interno), separados por vírgula. Padrão: '1,2'",
+        description="Experimento Minimax Iterativo: Caterpillar cheio com 2 pernas em todos os nós da espinha (m <= 100)."
     )
     parser.add_argument(
         "--m-min",
         type=int,
         default=1,
-        help="Tamanho mínimo de vértices internos da espinha m (padrão: 1)",
+        help="Tamanho inicial da espinha m (padrão: 1)",
     )
     parser.add_argument(
         "--m-max",
         type=int,
-        default=8,
-        help="Tamanho máximo de vértices internos da espinha m (padrão: 8)",
+        default=100,
+        help="Tamanho limite máximo da espinha m (padrão: 100)",
+    )
+    parser.add_argument(
+        "--modo",
+        type=str,
+        choices=["todos", "diametral"],
+        default="todos",
+        help=(
+            "Modo de fixação das pernas na espinha: "
+            "'todos' = exatamente 2 pernas em cada nó da espinha (L=(2,)*m, n=3*m); "
+            "'diametral' = espinha diametral canônica com m nós internos (L=(0,)+(2,)*m+(0,), n=3*m+2). "
+            "Padrão: 'todos'"
+        ),
+    )
+    parser.add_argument(
+        "--limite-nos",
+        type=int,
+        default=None,
+        help="Limite opcional de nós Minimax por instância para evitar esperas excessivas em m elevado (ex: 2000000).",
     )
     parser.add_argument(
         "--detalhes",
         action="store_true",
-        help="Se informado, exibe a variação principal completa de cada partida ótima.",
+        help="Exibe a trilha ótima passo a passo (variação principal) de cada instância iterativamente.",
     )
     parser.add_argument(
         "--sem-salvar",
         action="store_true",
-        help="Não salva os arquivos CSV e JSON em resultados/",
+        help="Não grava os arquivos CSV e JSON ao final da execução.",
     )
 
     args = parser.parse_args()
 
-    lista_p = [int(x.strip()) for x in args.p.split(",") if x.strip()]
-
-    print("=" * 90)
-    print("EXPERIMENTO: EXPANSÃO DA ESPINHA DIAMETRAL EM CATERPILLARS UNIFORMES C(m, p)")
-    print("=" * 90)
-    print(f"Parâmetros: p in {lista_p} | Espinha interna m de {args.m_min} até {args.m_max}")
-    print("Convenção: Alice inicia jogando (MAX = +1) | Convenção Normal (último a jogar vence)")
-
-    registros = executar_experimento_uniformes_espinha(
-        lista_p=lista_p,
-        m_min=args.m_min,
-        m_max=args.m_max,
-        salvar_arquivos=not args.sem_salvar,
+    desc_modo = (
+        f"Todos os nós da espinha têm 2 pernas (n = 3*m, L = (2,)*m)"
+        if args.modo == "todos"
+        else f"Espinha diametral com m internos tendo 2 pernas (n = 3*m+2, L = (0, 2..2, 0))"
     )
 
-    formatar_tabela(registros)
+    print("=" * 95)
+    print("EXPERIMENTO ITERATIVO: CATERPILLARS CHEIOS COM 2 PERNAS POR NÓ DA ESPINHA")
+    print("=" * 95)
+    print(f"Modo: {desc_modo}")
+    print(f"Faixa de espinha configurada: m = {args.m_min} até {args.m_max} (limite máximo: 100)")
+    print("Convenção: Alice sempre inicia jogando (MAX = +1) | Convenção Normal (último a jogar vence)")
+    print("Controle de Execução: Você decide quando parar a execução pressionando [Ctrl + C] a qualquer momento.")
+    print("=" * 95)
+    print(formatar_cabecalho_tabela(), flush=True)
 
-    if args.detalhes:
-        imprimir_variacao_principal(registros)
+    registros: list[dict] = []
+    interrompido = False
+    m_atual = args.m_min
 
-    imprimir_relatorio_analitico(registros)
+    try:
+        for m in range(args.m_min, args.m_max + 1):
+            m_atual = m
+            try:
+                reg = analisar_caterpillar_cheio_2_pernas(
+                    m=m,
+                    modo=args.modo,
+                    id_inst=len(registros) + 1,
+                    limite_nos=args.limite_nos,
+                )
+                registros.append(reg)
+                print(formatar_linha_tabela(reg), flush=True)
 
-    if not args.sem_salvar:
-        raiz = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        print(f"\n[Arquivos Gerados com Sucesso]")
-        print(f" -> {os.path.join(raiz, 'resultados', 'experimento_uniformes_espinha.csv')}")
-        print(f" -> {os.path.join(raiz, 'resultados', 'experimento_uniformes_espinha.json')}")
+                if args.detalhes:
+                    imprimir_detalhe_instancia(reg)
+                    sys.stdout.flush()
+
+            except LimiteDeNosExcedido as err:
+                print(f"{m:3d} | LIMITE DE NÓS EXCEDIDO ({err}). Avançando...", flush=True)
+
+    except KeyboardInterrupt:
+        interrompido = True
+        print("\n\n" + "!" * 95)
+        print(f"[INTERRUPÇÃO SOLICITADA] Execução parada pelo usuário (Ctrl+C) no tamanho de espinha m = {m_atual}.")
+        print("!" * 95)
+
+    finally:
+        if registros:
+            imprimir_sintese_final(registros, interrompido=interrompido)
+
+            if not args.sem_salvar:
+                caminho_csv, caminho_json = salvar_resultados_caterpillar_cheio(registros)
+                print(f"\n[Resultados Salvos com Sucesso]")
+                print(f" -> Arquivo CSV:  {caminho_csv}")
+                print(f" -> Arquivo JSON: {caminho_json}")
 
 
 if __name__ == "__main__":
