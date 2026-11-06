@@ -70,8 +70,8 @@ def resolver_passo(m: int) -> dict:
         "ja": ja,
         "jb": jb,
         "prop": prop,
-        "tempo_s": solver.stats.tempo_s,
-        "nos": solver.stats.nos_visitados,
+        "tempo_s": solver.tempo_s,
+        "nos": solver.nos_visitados,
         "trilha": pv,
     }
 

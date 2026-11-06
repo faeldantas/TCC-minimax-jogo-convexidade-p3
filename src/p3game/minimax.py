@@ -1,123 +1,81 @@
 """
-Camada 4 -- Solucionador Minimax Puro (Agnóstico ao Jogo).
-
-Implementação essencial do algoritmo Minimax:
-- Sem poda Alfa-Beta (avalia todos os ramos via max/min exaustivo).
-- Alice = MAX (+1), Bob = MIN (-1).
-- Convenção Normal: quem não possui jogadas válidas no seu turno perde.
-  Portanto, um estado terminal tem valor -1 para Alice (MAX) e +1 para Bob (MIN).
+Camada 4 -- Algoritmo Minimax Puro sem poda Alfa-Beta (CORE).
 """
 
 from __future__ import annotations
-
 import sys
 import time
-from dataclasses import dataclass, asdict
-
-from .jogo import JogoImparcialNormal
 
 MAX, MIN = +1, -1
 
 
-@dataclass
-class Estatisticas:
-    nos_visitados: int = 0
-    nos_terminais: int = 0
-    acertos_tabela: int = 0
-    entradas_tabela: int = 0
-    tempo_s: float = 0.0
-
-    def como_dict(self) -> dict:
-        return asdict(self)
-
-
 class Minimax:
     """
-    Motor Minimax essencial para jogos combinatórios imparciais sob convenção normal.
-    Opera exclusivamente sobre a interface JogoImparcialNormal.
+    Minimax Puro para jogos combinatórios imparciais sob convenção normal.
+    - Alice = MAX (+1)
+    - Bob = MIN (-1)
+    - Sem corte alfa-beta: avalia todos os ramos exaustivamente via max/min.
     """
 
-    def __init__(
-        self,
-        jogo: JogoImparcialNormal,
-        memoizacao: bool = True,
-        **kwargs,  # Aceita e ignora parâmetros de podas antigas para compatibilidade
-    ):
+    def __init__(self, jogo, memoizacao: bool = True):
         self.jogo = jogo
         self.memoizacao = memoizacao
-        self.tabela: dict = {}
-        self.stats = Estatisticas()
+        self.tabela: dict[int, int] = {}
+        self.nos_visitados = 0
+        self.tempo_s = 0.0
         sys.setrecursionlimit(max(10_000, sys.getrecursionlimit()))
 
-    def valor(self, estado, jogador: int) -> int:
-        """
-        Calcula o valor Minimax PURO (+1: vitória de Alice, -1: vitória de Bob).
-        Não utiliza poda Alfa-Beta: avalia exaustivamente todos os sucessores.
-        """
-        st = self.stats
-        st.nos_visitados += 1
+    def valor(self, S: int, jogador: int) -> int:
+        self.nos_visitados += 1
 
-        if self.memoizacao:
-            r = self.tabela.get(estado)
-            if r is not None:
-                st.acertos_tabela += 1
-                return r * jogador
+        if self.memoizacao and S in self.tabela:
+            return self.tabela[S] * jogador
 
-        sucessores = self.jogo.jogadas(estado)
+        sucessores = self.jogo.jogadas(S)
         if not sucessores:
-            st.nos_terminais += 1
-            v = -jogador  # O jogador da vez não tem lances e perde
+            v = -jogador  # Sem lances legais: quem deveria jogar perde
         elif jogador == MAX:
-            # Alice escolhe a jogada que maximiza o valor (sem corte alfa-beta)
             v = max(self.valor(filho, MIN) for _, filho in sucessores)
         else:
-            # Bob escolhe a jogada que minimiza o valor (sem corte alfa-beta)
             v = min(self.valor(filho, MAX) for _, filho in sucessores)
 
         if self.memoizacao:
-            self.tabela[estado] = v * jogador
-            st.entradas_tabela = len(self.tabela)
+            self.tabela[S] = v * jogador
 
         return v
 
     def resolver(self) -> int:
-        """Determina o valor minimax da posição inicial com Alice na vez."""
         t0 = time.perf_counter()
         try:
             return self.valor(self.jogo.estado_inicial(), MAX)
         finally:
-            self.stats.tempo_s += time.perf_counter() - t0
-
-    def jogadas_vencedoras(self, estado=None, jogador: int = MAX) -> list[int]:
-        """Retorna todas as jogadas legais que garantem a vitória de `jogador`."""
-        if estado is None:
-            estado = self.jogo.estado_inicial()
-        outro = -jogador
-        return [
-            j for j, filho in self.jogo.jogadas(estado)
-            if self.valor(filho, outro) == jogador
-        ]
+            self.tempo_s = time.perf_counter() - t0
 
     def variacao_principal(self) -> list[dict]:
-        """Reconstrói uma partida sob jogo ótimo até a infecção total do grafo."""
-        estado = self.jogo.estado_inicial()
+        """Reconstrói a partida passo a passo sob jogo ótimo."""
+        from .convexidade import fecho_p3
+        S = self.jogo.estado_inicial()
         jogador = MAX
         partida = []
+
         while True:
-            jogadas = self.jogo.jogadas(estado)
-            if not jogadas:
+            sucessores = self.jogo.jogadas(S)
+            if not sucessores:
                 return partida
-            # Jogador vencedor joga lance vencedor; o perdedor joga o primeiro lance legal
+
+            # Seleciona o lance ótimo
             escolhida = next(
-                ((j, f) for j, f in jogadas if self.valor(f, -jogador) == jogador),
-                jogadas[0],
+                ((v, prox) for v, prox in sucessores if self.valor(prox, -jogador) == jogador),
+                sucessores[0],
             )
-            j, filho = escolhida
-            _, propagados = self.jogo.sucessor(estado, j) if hasattr(self.jogo, "sucessor") else (None, [])
+            v, prox_S = escolhida
+            _, props = fecho_p3(self.jogo.adj, S | (1 << v))
+
             partida.append({
                 "turno": len(partida) + 1,
                 "jogador": "Alice" if jogador == MAX else "Bob",
-                "jogada": self.jogo.rotulo(j),
-                "propagados": [self.jogo.rotulo(p) for p in propagados],
+                "jogada": self.jogo.rotulo(v),
+                "propagados": [self.jogo.rotulo(p) for p in props],
             })
-            estado, jogador = filho, -jogador
+            S = prox_S
+            jogador = -jogador
