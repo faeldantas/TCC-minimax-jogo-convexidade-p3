@@ -50,14 +50,14 @@ def formatar_linha(m: int, k: int, n: int, v: int, turnos: int, ja: int, jb: int
 
 
 def resolver_passo(m: int) -> dict:
-    L = assinatura_uniforme_2pernas(m)
-    cat = Caterpillar(L)
-    jogo = JogoFechoConvexoP3(cat.adj, cat.rotulos)
-    solver = Minimax(jogo, memoizacao=True)
+    L = assinatura_uniforme_2pernas(m) #Gera a assinatura canônica uniforme para o tamanho m da espinha
+    cat = Caterpillar(L) #Cria o caterpillar a partir da assinatura L
+    jogo = JogoFechoConvexoP3(cat.adj, cat.rotulos) #Cria o jogo de fecho convexo P3 a partir do caterpillar
+    solver = Minimax(jogo, memoizacao=True) #Cria o solver Minimax com memoização para o jogo
 
-    v = solver.resolver()
-    pv = solver.variacao_principal()
-    ja = sum(1 for p in pv if p["jogador"] == "Alice")
+    v = solver.resolver() #Resolve o jogo e retorna o vencedor (MAX ou MIN)
+    pv = solver.variacao_principal() #Obtém a variação principal (sequência de jogadas) do jogo
+    ja = sum(1 for p in pv if p["jogador"] == "Alice") 
     jb = sum(1 for p in pv if p["jogador"] == "Bob")
     prop = cat.n - len(pv)
 
@@ -110,7 +110,7 @@ def main():
     m = args.m_min
     try:
         for m in range(args.m_min, args.m_max + 1):
-            r = resolver_passo(m)
+            r = resolver_passo(m) #Tenta achar a solução para o tamanho m da espinha
             linha = formatar_linha(
                 r["m"], r["k"], r["n"], r["v"],
                 r["turnos"], r["ja"], r["jb"],
