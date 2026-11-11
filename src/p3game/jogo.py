@@ -8,9 +8,10 @@ from .convexidade import fecho_p3_incremental
 
 class JogoFechoConvexoP3:
     """
-    Closed Hull Game sob convenção normal.
+    Closed Hull Game sob convenção normal com redução por simetria.
     - Estado inicial: conjunto vazio S = 0.
-    - Jogada legal: escolher qualquer vértice v não infectado.
+    - Jogada legal: escolher qualquer vértice v não infectado (respeitando a ordem
+      canônica de folhas gêmeas e deduplicação por espelhamento).
     - Transição: novo estado é o fecho [S ∪ {v}]_P3.
     - Vitória: quem faz a última jogada válida (completando o grafo) vence.
     """
@@ -21,18 +22,68 @@ class JogoFechoConvexoP3:
         self.n = len(adj)
         self.adj_mask = [sum(1 << u for u in viz) for viz in adj]
 
+        # 1. Simetria de folhas gêmeas (grau 1 adjacentes ao mesmo nó interno)
+        grau = [len(viz) for viz in adj]
+        internos = [v for v in range(self.n) if grau[v] > 1]
+        folhas_de = [sorted(u for u in adj[v] if grau[u] == 1) for v in internos]
+
+        self.pred_folha = [-1] * self.n
+        for folhas in folhas_de:
+            for idx in range(1, len(folhas)):
+                self.pred_folha[folhas[idx]] = folhas[idx - 1]
+
+        # 2. Simetria de reflexão (espelhamento da espinha quando palíndroma)
+        espelho_v = list(range(self.n))
+        f_lens = [len(f) for f in folhas_de]
+        if len(internos) >= 2 and f_lens == f_lens[::-1]:
+            m_int = len(internos)
+            for i, u in enumerate(internos):
+                u_rev = internos[m_int - 1 - i]
+                espelho_v[u] = u_rev
+                for f1, f2 in zip(folhas_de[i], folhas_de[m_int - 1 - i]):
+                    espelho_v[f1] = f2
+
+        # Tabelas de consulta (LUTs) de 8 bits para espelhamento da máscara em O(1)
+        self.num_blocos = (self.n + 7) // 8
+        self.luts: list[list[int]] = []
+        for b in range(self.num_blocos):
+            offset = b * 8
+            lut = [0] * 256
+            for val in range(256):
+                acc = 0
+                for bit in range(8):
+                    if (val >> bit) & 1 and (offset + bit) < self.n:
+                        acc |= (1 << espelho_v[offset + bit])
+                lut[val] = acc
+            self.luts.append(lut)
+
     def estado_inicial(self) -> int:
         return 0
 
+    def chave_canonica(self, S: int) -> int:
+        """Retorna o representante canônico min(S, espelho(S)) em O(1) via LUTs."""
+        S_rev = 0
+        for b in range(self.num_blocos):
+            S_rev |= self.luts[b][(S >> (b * 8)) & 0xFF]
+        return S if S <= S_rev else S_rev
+
     def jogadas(self, S: int) -> list[tuple[int, int]]:
-        """Retorna lista de pares (vértice escolhido, máscara do estado sucessor)."""
+        """Retorna lista de pares (vértice escolhido, máscara do estado sucessor) sem simetrias redundantes."""
         res = []
+        vistos = set()
         adj = self.adj
         adj_mask = self.adj_mask
+        pred = self.pred_folha
         for v in range(self.n):
             if not (S >> v) & 1:
+                pf = pred[v]
+                if pf != -1 and not ((S >> pf) & 1):
+                    continue
                 prox_S = fecho_p3_incremental(adj, adj_mask, S, v)
-                res.append((v, prox_S))
+                ch = self.chave_canonica(prox_S)
+                if ch not in vistos:
+                    vistos.add(ch)
+                    res.append((v, prox_S))
         return res
 
     def rotulo(self, v: int) -> str:

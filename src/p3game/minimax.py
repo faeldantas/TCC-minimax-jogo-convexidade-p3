@@ -36,8 +36,9 @@ class Minimax:
         3. Filhos desconhecidos (0) antes de filhos já sabidamente perdedores (+1 -> prioridade -1).
         """
         km = self.killer.get(S.bit_count(), -1)
+        canon = self.jogo.chave_canonica
         sucessores.sort(
-            key=lambda par: (-self.tabela.get(par[1], 0), par[0] == km),
+            key=lambda par: (-self.tabela.get(canon(par[1]), 0), par[0] == km),
             reverse=True,
         )
         return sucessores
@@ -45,8 +46,9 @@ class Minimax:
     def valor(self, S: int, jogador: int, alfa: int = MIN, beta: int = MAX) -> int: # Retorna o valor do estado S para o jogador atual (MAX ou MIN) com poda Alfa-Beta
         self.nos_visitados += 1 # Incrementa o contador de nós visitados a cada chamada recursiva do método valor
 
-        if self.memoizacao and S in self.tabela: # Se a memoização estiver ativada e o estado S já tiver sido avaliado, retorna o valor armazenado multiplicado pelo jogador atual
-            return self.tabela[S] * jogador
+        chave = self.jogo.chave_canonica(S)
+        if self.memoizacao and chave in self.tabela: # Se a memoização estiver ativada e o estado S já tiver sido avaliado, retorna o valor armazenado multiplicado pelo jogador atual
+            return self.tabela[chave] * jogador
 
         sucessores = self.jogo.jogadas(S)
         if not sucessores:
@@ -71,7 +73,7 @@ class Minimax:
                         break  # Poda Alfa: MIN já garantiu vitória (-1)
 
         if self.memoizacao:
-            self.tabela[S] = v * jogador
+            self.tabela[chave] = v * jogador
 
         return v
 
