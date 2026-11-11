@@ -1,5 +1,5 @@
 """
-Camada 4 -- Algoritmo Minimax com Poda Alfa-Beta (CORE).
+Camada 4 -- Algoritmo Minimax com Poda Alfa-Beta e Ordenação de Jogadas (CORE).
 """
 
 from __future__ import annotations
@@ -11,19 +11,36 @@ MAX, MIN = +1, -1
 
 class Minimax:
     """
-    Minimax com Poda Alfa-Beta para jogos combinatórios imparciais sob convenção normal.
+    Minimax com Poda Alfa-Beta e Ordenação de Jogadas (Move Ordering).
     - Alice = MAX (+1)
     - Bob = MIN (-1)
     - Com corte alfa-beta: interrompe a busca no nó assim que alfa >= beta.
+    - Ordenação de jogadas: prioriza estados vencedores na tabela de transposição
+      e lances que geraram podas na mesma profundidade (Killer Move Heuristic).
     """
 
     def __init__(self, jogo, memoizacao: bool = True):
         self.jogo = jogo
         self.memoizacao = memoizacao
         self.tabela: dict[int, int] = {} # Tabela de memoização para armazenar os valores dos estados já avaliados
+        self.killer: dict[int, int] = {} # Armazena o último lance que provocou poda em cada profundidade
         self.nos_visitados = 0
         self.tempo_s = 0.0
         sys.setrecursionlimit(max(10_000, sys.getrecursionlimit()))
+
+    def ordenar_jogadas(self, S: int, sucessores: list[tuple[int, int]]) -> list[tuple[int, int]]:
+        """
+        Ordena os movimentos candidatos para maximizar os cortes Alfa-Beta:
+        1. Filhos já conhecidos na tabela como perdedores para o oponente (-1 -> prioridade +1).
+        2. Lance 'killer' que já causou poda na mesma profundidade (S.bit_count()).
+        3. Filhos desconhecidos (0) antes de filhos já sabidamente perdedores (+1 -> prioridade -1).
+        """
+        km = self.killer.get(S.bit_count(), -1)
+        sucessores.sort(
+            key=lambda par: (-self.tabela.get(par[1], 0), par[0] == km),
+            reverse=True,
+        )
+        return sucessores
 
     def valor(self, S: int, jogador: int, alfa: int = MIN, beta: int = MAX) -> int: # Retorna o valor do estado S para o jogador atual (MAX ou MIN) com poda Alfa-Beta
         self.nos_visitados += 1 # Incrementa o contador de nós visitados a cada chamada recursiva do método valor
@@ -34,20 +51,24 @@ class Minimax:
         sucessores = self.jogo.jogadas(S)
         if not sucessores:
             v = -jogador  # Sem lances legais: quem deveria jogar perde
-        elif jogador == MAX:
-            v = MIN
-            for _, filho in sucessores:
-                v = max(v, self.valor(filho, MIN, alfa, beta))
-                alfa = max(alfa, v)
-                if alfa >= beta:
-                    break  # Poda Beta: MAX já garantiu vitória (+1)
         else:
-            v = MAX
-            for _, filho in sucessores:
-                v = min(v, self.valor(filho, MAX, alfa, beta))
-                beta = min(beta, v)
-                if beta <= alfa:
-                    break  # Poda Alfa: MIN já garantiu vitória (-1)
+            sucessores = self.ordenar_jogadas(S, sucessores)
+            if jogador == MAX:
+                v = MIN
+                for mv, filho in sucessores:
+                    v = max(v, self.valor(filho, MIN, alfa, beta))
+                    alfa = max(alfa, v)
+                    if alfa >= beta:
+                        self.killer[S.bit_count()] = mv
+                        break  # Poda Beta: MAX já garantiu vitória (+1)
+            else:
+                v = MAX
+                for mv, filho in sucessores:
+                    v = min(v, self.valor(filho, MAX, alfa, beta))
+                    beta = min(beta, v)
+                    if beta <= alfa:
+                        self.killer[S.bit_count()] = mv
+                        break  # Poda Alfa: MIN já garantiu vitória (-1)
 
         if self.memoizacao:
             self.tabela[S] = v * jogador
