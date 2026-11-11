@@ -3,7 +3,7 @@ Camada 3 -- Regras do Closed Hull Game (CHG) na convexidade P_3 (CORE).
 """
 
 from __future__ import annotations
-from .convexidade import fecho_p3
+from .convexidade import fecho_p3_incremental
 
 
 class JogoFechoConvexoP3:
@@ -19,6 +19,7 @@ class JogoFechoConvexoP3:
         self.adj = adj
         self.rotulos = rotulos
         self.n = len(adj)
+        self.adj_mask = [sum(1 << u for u in viz) for viz in adj]
 
     def estado_inicial(self) -> int:
         return 0
@@ -26,9 +27,11 @@ class JogoFechoConvexoP3:
     def jogadas(self, S: int) -> list[tuple[int, int]]:
         """Retorna lista de pares (vértice escolhido, máscara do estado sucessor)."""
         res = []
+        adj = self.adj
+        adj_mask = self.adj_mask
         for v in range(self.n):
             if not (S >> v) & 1:
-                prox_S, _ = fecho_p3(self.adj, S | (1 << v))
+                prox_S = fecho_p3_incremental(adj, adj_mask, S, v)
                 res.append((v, prox_S))
         return res
 

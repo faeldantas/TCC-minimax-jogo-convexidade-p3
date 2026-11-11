@@ -38,3 +38,33 @@ def fecho_p3(adj: list[list[int]], S: int) -> tuple[int, list[int]]:
                     enfileirado[w] = True
 
     return S, propagados
+
+
+def fecho_p3_incremental(adj: list[list[int]], adj_mask: list[int], S: int, v: int) -> int:
+    """
+    Fecho convexo P_3 incremental e bitwise a partir de um estado S já fechado
+    ao infectar o vértice v:
+    - Inspeciona apenas a vizinhança local a partir de v (sem varrer os n vértices).
+    - Usa o truque de Kernighan (viz_inf & (viz_inf - 1)) para testar >= 2 vizinhos em O(1).
+    - Retorna apenas a máscara final S, evitando alocações desnecessárias na busca.
+    """
+    S |= (1 << v)
+    fila: list[int] = []
+
+    for u in adj[v]:
+        if not (S >> u) & 1:
+            viz_inf = S & adj_mask[u]
+            if viz_inf & (viz_inf - 1):  # Verdadeiro se e só se u possui >= 2 vizinhos infectados
+                S |= (1 << u)
+                fila.append(u)
+
+    while fila:
+        u = fila.pop()
+        for w in adj[u]:
+            if not (S >> w) & 1:
+                viz_inf = S & adj_mask[w]
+                if viz_inf & (viz_inf - 1):
+                    S |= (1 << w)
+                    fila.append(w)
+
+    return S
