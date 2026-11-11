@@ -35,12 +35,18 @@ def formatar_cabecalho() -> str:
     return f"{div}\n{cab}\n{div}"
 
 
+def formatar_tempo(tempo_s: float) -> str:
+    """Formata o tempo em milissegundos (ms), segundos (s) ou minutos (min)."""
+    if tempo_s < 1.0:
+        return f"{tempo_s * 1000:7.2f} ms"
+    if tempo_s < 60.0:
+        return f"{tempo_s:7.2f} s "
+    return f"{tempo_s / 60.0:7.2f} min"
+
+
 def formatar_linha(m: int, k: int, n: int, v: int, turnos: int, ja: int, jb: int, prop: int, tempo_s: float, nos: int) -> str:
     venc_str = "Alice" if v == MAX else "Bob"
-    if tempo_s < 1.0:
-        t_str = f"{tempo_s * 1000:7.2f} ms"
-    else:
-        t_str = f"{tempo_s:7.2f} s "
+    t_str = formatar_tempo(tempo_s)
 
     return (
         f"{m:2d} | {k:2d} | {n:3d} | "
