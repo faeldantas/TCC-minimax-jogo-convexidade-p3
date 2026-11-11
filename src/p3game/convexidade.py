@@ -18,8 +18,8 @@ def fecho_p3(adj: list[list[int]], S: int) -> tuple[int, list[int]]:
     enfileirado = [False] * n
 
     for v in range(n):
-        if not (S >> v) & 1:
-            c = sum(1 for u in adj[v] if (S >> u) & 1)
+        if not (S >> v) & 1: # Se o vértice v não está infectado (não faz parte do conjunto S)
+            c = sum(1 for u in adj[v] if (S >> u) & 1) # Conta quantos vizinhos de v estão infectados (fazem parte do conjunto S)
             contador[v] = c
             if c >= 2:
                 fila.append(v)

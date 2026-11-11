@@ -20,15 +20,15 @@ class Minimax:
     def __init__(self, jogo, memoizacao: bool = True):
         self.jogo = jogo
         self.memoizacao = memoizacao
-        self.tabela: dict[int, int] = {}
+        self.tabela: dict[int, int] = {} # Tabela de memoização para armazenar os valores dos estados já avaliados
         self.nos_visitados = 0
         self.tempo_s = 0.0
         sys.setrecursionlimit(max(10_000, sys.getrecursionlimit()))
 
-    def valor(self, S: int, jogador: int) -> int:
-        self.nos_visitados += 1
+    def valor(self, S: int, jogador: int) -> int: # Retorna o valor do estado S para o jogador atual (MAX ou MIN)
+        self.nos_visitados += 1 # Incrementa o contador de nós visitados a cada chamada recursiva do método valor
 
-        if self.memoizacao and S in self.tabela:
+        if self.memoizacao and S in self.tabela: # Se a memoização estiver ativada e o estado S já tiver sido avaliado, retorna o valor armazenado multiplicado pelo jogador atual
             return self.tabela[S] * jogador
 
         sucessores = self.jogo.jogadas(S)
@@ -45,13 +45,13 @@ class Minimax:
         return v
 
     def resolver(self) -> int:
-        t0 = time.perf_counter()
+        t0 = time.perf_counter() #Marca o tempo de início da resolução do jogo
         try:
-            return self.valor(self.jogo.estado_inicial(), MAX)
+            return self.valor(self.jogo.estado_inicial(), MAX) # Inicia a resolução do jogo a partir do estado inicial, assumindo que Alice (MAX) começa jogando
         finally:
             self.tempo_s = time.perf_counter() - t0
 
-    def variacao_principal(self) -> list[dict]:
+    def variacao_principal(self) -> list[dict]: 
         """Reconstrói a partida passo a passo sob jogo ótimo."""
         from .convexidade import fecho_p3
         S = self.jogo.estado_inicial()
