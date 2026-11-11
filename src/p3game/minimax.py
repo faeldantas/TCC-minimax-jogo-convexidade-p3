@@ -1,5 +1,5 @@
 """
-Camada 4 -- Algoritmo Minimax Puro sem poda Alfa-Beta (CORE).
+Camada 4 -- Algoritmo Minimax com Poda Alfa-Beta (CORE).
 """
 
 from __future__ import annotations
@@ -11,10 +11,10 @@ MAX, MIN = +1, -1
 
 class Minimax:
     """
-    Minimax Puro para jogos combinatórios imparciais sob convenção normal.
+    Minimax com Poda Alfa-Beta para jogos combinatórios imparciais sob convenção normal.
     - Alice = MAX (+1)
     - Bob = MIN (-1)
-    - Sem corte alfa-beta: avalia todos os ramos exaustivamente via max/min.
+    - Com corte alfa-beta: interrompe a busca no nó assim que alfa >= beta.
     """
 
     def __init__(self, jogo, memoizacao: bool = True):
@@ -25,7 +25,7 @@ class Minimax:
         self.tempo_s = 0.0
         sys.setrecursionlimit(max(10_000, sys.getrecursionlimit()))
 
-    def valor(self, S: int, jogador: int) -> int: # Retorna o valor do estado S para o jogador atual (MAX ou MIN)
+    def valor(self, S: int, jogador: int, alfa: int = MIN, beta: int = MAX) -> int: # Retorna o valor do estado S para o jogador atual (MAX ou MIN) com poda Alfa-Beta
         self.nos_visitados += 1 # Incrementa o contador de nós visitados a cada chamada recursiva do método valor
 
         if self.memoizacao and S in self.tabela: # Se a memoização estiver ativada e o estado S já tiver sido avaliado, retorna o valor armazenado multiplicado pelo jogador atual
@@ -35,9 +35,19 @@ class Minimax:
         if not sucessores:
             v = -jogador  # Sem lances legais: quem deveria jogar perde
         elif jogador == MAX:
-            v = max(self.valor(filho, MIN) for _, filho in sucessores)
+            v = MIN
+            for _, filho in sucessores:
+                v = max(v, self.valor(filho, MIN, alfa, beta))
+                alfa = max(alfa, v)
+                if alfa >= beta:
+                    break  # Poda Beta: MAX já garantiu vitória (+1)
         else:
-            v = min(self.valor(filho, MAX) for _, filho in sucessores)
+            v = MAX
+            for _, filho in sucessores:
+                v = min(v, self.valor(filho, MAX, alfa, beta))
+                beta = min(beta, v)
+                if beta <= alfa:
+                    break  # Poda Alfa: MIN já garantiu vitória (-1)
 
         if self.memoizacao:
             self.tabela[S] = v * jogador
@@ -47,7 +57,7 @@ class Minimax:
     def resolver(self) -> int:
         t0 = time.perf_counter() #Marca o tempo de início da resolução do jogo
         try:
-            return self.valor(self.jogo.estado_inicial(), MAX) # Inicia a resolução do jogo a partir do estado inicial, assumindo que Alice (MAX) começa jogando
+            return self.valor(self.jogo.estado_inicial(), MAX, MIN, MAX) # Inicia a resolução do jogo a partir do estado inicial com janela [MIN, MAX]
         finally:
             self.tempo_s = time.perf_counter() - t0
 

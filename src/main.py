@@ -106,7 +106,7 @@ def main():
     args = parser.parse_args()
 
     print("=" * 87)
-    print("CATERPILLARS UNIFORMES L = (0, 2..2, 0) -- MINIMAX PURO (CORE)")
+    print("CATERPILLARS UNIFORMES L = (0, 2..2, 0) -- MINIMAX COM PODA ALFA-BETA (CORE)")
     print("=" * 87)
     print("Formato: 2 pernas em cada nó interno da espinha | Alice sempre inicia (MAX)")
     print("Pressione [Ctrl + C] para interromper a execução a qualquer momento.")
