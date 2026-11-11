@@ -46,6 +46,14 @@ class Minimax:
     def valor(self, S: int, jogador: int, alfa: int = MIN, beta: int = MAX) -> int: # Retorna o valor do estado S para o jogador atual (MAX ou MIN) com poda Alfa-Beta
         self.nos_visitados += 1 # Incrementa o contador de nós visitados a cada chamada recursiva do método valor
 
+        # Corte de paridade em O(1): quando todos os nós internos (grau >= 2) já estão
+        # infectados, nenhuma propagação P_3 adicional pode ocorrer; cada folha restante
+        # consome exatamente 1 turno até o fim da partida.
+        mi = self.jogo.mascara_internos
+        if (S & mi) == mi:
+            restantes = self.jogo.n - S.bit_count()
+            return jogador if (restantes & 1) else -jogador
+
         chave = self.jogo.chave_canonica(S)
         if self.memoizacao and chave in self.tabela: # Se a memoização estiver ativada e o estado S já tiver sido avaliado, retorna o valor armazenado multiplicado pelo jogador atual
             return self.tabela[chave] * jogador
