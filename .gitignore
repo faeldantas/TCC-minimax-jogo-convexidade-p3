@@ -1,0 +1,42 @@
+# Bytecode e Cache do Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyc
+*.pyo
+
+# Ambientes Virtuais
+venv/
+.venv/
+env/
+ENV/
+build/
+dist/
+*.egg-info/
+
+# Resultados de execuções, experimentos e visualizações (não são código-fonte)
+resultados/
+legado_v1/resultados/
+*.csv
+*.json
+*.png
+*.svg
+*.html
+*.log
+*.tmp
+
+# Ferramentas de Teste e Cobertura
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Configurações de IDEs e Editores
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Arquivos do Sistema Operacional
+Thumbs.db
+Desktop.ini
+.DS_Store
