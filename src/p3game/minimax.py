@@ -31,30 +31,34 @@ class Minimax:
     def ordenar_jogadas(self, S: int, sucessores: list[tuple[int, int]]) -> list[tuple[int, int]]:
         """
         Ordena os movimentos candidatos para maximizar os cortes Alfa-Beta:
-        1. Filhos já conhecidos na tabela como perdedores para o oponente (-1 -> prioridade +1).
-        2. Lance 'killer' que já causou poda na mesma profundidade (S.bit_count()).
-        3. Filhos desconhecidos (0) antes de filhos já sabidamente perdedores (+1 -> prioridade -1).
+        1. Filhos decididos em O(1) por simetria/paridade como perdedores para o oponente (+2).
+        2. Filhos já conhecidos na tabela como perdedores para o oponente (-1 -> prioridade +1).
+        3. Lance 'killer' que já causou poda na mesma profundidade (S.bit_count()).
+        4. Filhos desconhecidos (0) antes de filhos sabidamente perdedores (-1 ou -2).
         """
         km = self.killer.get(S.bit_count(), -1)
         canon = self.jogo.chave_canonica
-        sucessores.sort(
-            key=lambda par: (-self.tabela.get(canon(par[1]), 0), par[0] == km),
-            reverse=True,
-        )
+        tab = self.tabela
+
+        def prioridade(par: tuple[int, int]) -> tuple[int, bool]:
+            ch = canon(par[1])
+            if not ch[0]:
+                return (2 if ch[1] == 0 else -2, par[0] == km)
+            return (-tab.get(ch, 0), par[0] == km)
+
+        sucessores.sort(key=prioridade, reverse=True)
         return sucessores
 
     def valor(self, S: int, jogador: int, alfa: int = MIN, beta: int = MAX) -> int: # Retorna o valor do estado S para o jogador atual (MAX ou MIN) com poda Alfa-Beta
         self.nos_visitados += 1 # Incrementa o contador de nós visitados a cada chamada recursiva do método valor
 
-        # Corte de paridade em O(1): quando todos os nós internos (grau >= 2) já estão
-        # infectados, nenhuma propagação P_3 adicional pode ocorrer; cada folha restante
-        # consome exatamente 1 turno até o fim da partida.
-        mi = self.jogo.mascara_internos
-        if (S & mi) == mi:
-            restantes = self.jogo.n - S.bit_count()
-            return jogador if (restantes & 1) else -jogador
-
         chave = self.jogo.chave_canonica(S)
+        # Corte de simetria/paridade em O(1): quando todos os nós internos já estão infectados
+        # ou quando todos os segmentos ativos restantes se anulam em pares simétricos (ch[0] vazio),
+        # o vencedor é decidido imediatamente pelo bit de paridade das folhas inertes (ch[1]).
+        if not chave[0]:
+            return jogador if chave[1] else -jogador
+
         if self.memoizacao and chave in self.tabela: # Se a memoização estiver ativada e o estado S já tiver sido avaliado, retorna o valor armazenado multiplicado pelo jogador atual
             return self.tabela[chave] * jogador
 
@@ -104,6 +108,7 @@ class Minimax:
             if not sucessores:
                 return partida
 
+            sucessores = self.ordenar_jogadas(S, sucessores)
             # Seleciona o lance ótimo
             escolhida = next(
                 ((v, prox) for v, prox in sucessores if self.valor(prox, -jogador) == jogador),

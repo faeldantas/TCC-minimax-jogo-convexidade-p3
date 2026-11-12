@@ -106,7 +106,7 @@ def main():
     args = parser.parse_args()
 
     print("=" * 87)
-    print("CATERPILLARS UNIFORMES L = (0, 2..2, 0) -- CORTE DE PARIDADE E FOLHAS INERTES")
+    print("CATERPILLARS UNIFORMES L = (0, 2..2, 0) -- CANONIZAÇÃO DE SEGMENTOS E PARIDADE")
     print("=" * 87)
     print("Formato: 2 pernas em cada nó interno da espinha | Alice sempre inicia (MAX)")
     print("Pressione [Ctrl + C] para interromper a execução a qualquer momento.")
