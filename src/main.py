@@ -20,9 +20,9 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from p3game import Caterpillar, JogoFechoConvexoP3, Minimax, MAX
 
 
-def assinatura_uniforme_2pernas(m: int) -> tuple[int, ...]:
-    """Retorna a assinatura canônica uniforme (0, 2, ..., 2, 0) com m nós internos."""
-    return (0,) + (2,) * m + (0,)
+def assinatura_uniforme(m: int, p: int = 2) -> tuple[int, ...]:
+    """Retorna a assinatura canônica uniforme (0, p..p, 0) com m nós internos."""
+    return (0,) + (p,) * m + (0,)
 
 
 def formatar_cabecalho() -> str:
@@ -55,8 +55,8 @@ def formatar_linha(m: int, k: int, n: int, v: int, turnos: int, ja: int, jb: int
     )
 
 
-def resolver_passo(m: int) -> dict:
-    L = assinatura_uniforme_2pernas(m) #Gera a assinatura canônica uniforme para o tamanho m da espinha
+def resolver_passo(m: int, p: int = 2) -> dict:
+    L = assinatura_uniforme(m, p) #Gera a assinatura canônica uniforme para o tamanho m da espinha
     cat = Caterpillar(L) #Cria o caterpillar a partir da assinatura L
     jogo = JogoFechoConvexoP3(cat.adj, cat.rotulos) #Cria o jogo de fecho convexo P3 a partir do caterpillar
     solver = Minimax(jogo, memoizacao=True) #Cria o solver Minimax com memoização para o jogo
@@ -84,7 +84,13 @@ def resolver_passo(m: int) -> dict:
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Expansão da espinha para caterpillars uniformes (0, 2..2, 0) com Minimax Puro."
+        description="Expansão contínua da espinha para caterpillars regulares C(m, p) para mapear o limite da solução ótima."
+    )
+    parser.add_argument(
+        "--pernas", "-p",
+        type=int,
+        default=2,
+        help="Quantidade de pernas em cada nó interno da espinha (padrão: 2).",
     )
     parser.add_argument(
         "--m-min",
@@ -96,7 +102,7 @@ def main():
         "--m-max",
         type=int,
         default=100,
-        help="Limite máximo de espinha interna m (padrão: 100).",
+        help="Limite máximo de espinha interna m (padrão: 100, execute até onde a máquina suportar).",
     )
     parser.add_argument(
         "--trilha",
@@ -106,9 +112,10 @@ def main():
     args = parser.parse_args()
 
     print("=" * 87)
-    print("CATERPILLARS UNIFORMES L = (0, 2..2, 0) -- MINIMAX COM PODA ALFA-BETA (CORE)")
+    print(f"CATERPILLARS REGULARES C(m, {args.pernas}) -- BUSCA DE LIMITE DA SOLUÇÃO ÓTIMA")
     print("=" * 87)
-    print("Formato: 2 pernas em cada nó interno da espinha | Alice sempre inicia (MAX)")
+    print(f"Formato: {args.pernas} perna(s) em cada nó interno da espinha | Alice sempre inicia (MAX)")
+    print("A busca expandirá a espinha continuamente até encontrar o limite computacional.")
     print("Pressione [Ctrl + C] para interromper a execução a qualquer momento.")
     print("=" * 87)
     print(formatar_cabecalho(), flush=True)
@@ -116,7 +123,7 @@ def main():
     m = args.m_min
     try:
         for m in range(args.m_min, args.m_max + 1):
-            r = resolver_passo(m) #Tenta achar a solução para o tamanho m da espinha
+            r = resolver_passo(m, args.pernas) #Tenta achar a solução para o tamanho m da espinha
             linha = formatar_linha(
                 r["m"], r["k"], r["n"], r["v"],
                 r["turnos"], r["ja"], r["jb"],
@@ -133,7 +140,8 @@ def main():
 
     except KeyboardInterrupt:
         print("\n" + "-" * 87)
-        print(f"[PARADA] Execução interrompida pelo usuário no tamanho m = {m}.")
+        print(f"[LIMITE ATINGIDO / INTERROMPIDO] Parada do teste no tamanho de espinha m = {m}.")
+        print("Anote os dados da tabela acima para registrar a fronteira alcançada no TCC.")
         print("-" * 87)
 
 
