@@ -1,25 +1,8 @@
 """
-p3game -- Closed Hull Game na convexidade P_3 em grafos caterpillar.
-
-Arquitetura em camadas (cada camada depende apenas das anteriores):
-    grafos.py       representação, enumeração canônica e famílias de caterpillars
-    convexidade.py  operadores I(S) e [S] da convexidade P_3 (bitmask)
-    jogo.py         interface abstrata de jogo imparcial + CHG em P_3
-    minimax.py      solucionador Minimax genérico (corte, memoização, simetria)
+p3game -- Pacote Core: Convexidade P_3 em Caterpillars e Minimax Puro.
 """
 
-from .grafos import (
-    Caterpillar, enumerar_caterpillars, numero_caterpillars, eh_assinatura_canonica,
-    canonizar, eh_caterpillar, assinatura_de_grafo,
-    caminho, estrela, dupla_estrela, uniforme, vassoura_dupla,
-)
-from .convexidade import fecho_p3, fecho_p3_iterativo, intervalo_p3, eh_p3_convexo, para_mascara, de_mascara
-from .jogo import JogoImparcialNormal, JogoFechoConvexoP3, JogoFechoConvexoP3Caterpillar
-from .minimax import Minimax, MAX, MIN, LimiteDeNosExcedido
-
-
-def resolver_caterpillar(L, **opcoes) -> tuple[int, Minimax]:
-    """Atalho: resolve o CHG-P3 no caterpillar de assinatura L."""
-    jogo = JogoFechoConvexoP3Caterpillar(Caterpillar(tuple(L)))
-    solver = Minimax(jogo, **opcoes)
-    return solver.resolver(), solver
+from .grafos import Caterpillar
+from .convexidade import fecho_p3
+from .jogo import JogoFechoConvexoP3
+from .minimax import Minimax, MAX, MIN

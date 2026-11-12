@@ -1,45 +1,141 @@
 """
-Ponto de entrada principal (CLI) do pacote `p3game`.
-Permite validar os exemplos do TCC e rodar as 3 baterias experimentais.
+Ponto de Entrada (Versão CORE).
+Testa caterpillars uniformes no formato canônico L = (0, 2..2, 0),
+expandindo iterativamente a espinha com suas 2 pernas por nó interno.
+
+Executa o algoritmo Minimax Puro (sem poda Alfa-Beta) e exibe de forma
+concisa: tamanho da espinha, quem vence, número de jogadas e poucas informações.
+Interrompa a qualquer momento com [Ctrl + C].
 """
 
+from __future__ import annotations
+
+import argparse
 import os
 import sys
 
+# Garante importação do pacote p3game
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from p3game import Caterpillar, fecho_p3, para_mascara, resolver_caterpillar
-from p3game.experimentos import executar_tudo
+from p3game import Caterpillar, JogoFechoConvexoP3, Minimax, MAX
 
 
-def validar_exemplos_do_tcc():
-    print("=" * 75)
-    print("VALIDAÇÃO DOS EXEMPLOS DO TCC (Figuras 1, 2, 3, 4 e 7)")
-    print("=" * 75)
+def assinatura_uniforme_2pernas(m: int) -> tuple[int, ...]:
+    """Retorna a assinatura canônica uniforme (0, 2, ..., 2, 0) com m nós internos."""
+    return (0,) + (2,) * m + (0,)
 
-    # 1. Figura 2: Fecho convexo de S = {v2, v6, v9, v10} em L = (0, 2, 0, 1, 1, 0)
-    cat = Caterpillar((0, 2, 0, 1, 1, 0))
-    idx = {r: i for i, r in enumerate(cat.rotulos)}
-    S_ini = para_mascara(idx[r] for r in ["v2", "v6", "v9", "v10"])
-    _, prop = fecho_p3(cat.adj, S_ini)
-    print(f"[Figura 2] Propagação para S={{v2,v6,v9,v10}}: {[cat.rotulos[u] for u in prop]}")
 
-    # 2. Figura 3: Caminho P_3 = (0, 0, 0)
-    v_p3, s_p3 = resolver_caterpillar((0, 0, 0))
-    venc_p3 = [s_p3.jogo.rotulo(j) for j in s_p3.jogadas_vencedoras()]
-    print(f"[Figura 3] Caminho P_3=(0,0,0): utilidade={v_p3:+d}, jogadas ótimas de Alice={venc_p3}")
+def formatar_cabecalho() -> str:
+    cab = (
+        f"{'m':>2} | {'k':>2} | {'n':>3} | "
+        f"{'Vencedor':^8} | {'Jogadas':^7} | {'Alice':^5} | {'Bob':^5} | "
+        f"{'Propagados':^10} | {'Tempo':^11} | {'Nós Minimax':^11}"
+    )
+    div = "-" * len(cab)
+    return f"{div}\n{cab}\n{div}"
 
-    # 3. Figuras 4 e 7: Estudo de caso L = (0, 2, 0, 1, 1, 0)
-    v_tcc, s_tcc = resolver_caterpillar((0, 2, 0, 1, 1, 0))
-    pv_tcc = s_tcc.variacao_principal()
-    print(f"[Figura 7] Grafo TCC L=(0,2,0,1,1,0): utilidade={v_tcc:+d} (Bob vence em {len(pv_tcc)} turnos)")
-    print("  Variação principal:", " -> ".join(
-        f"{p['jogador'][0]}({p['jogada']})" + (f"+{p['propagados']}" if p["propagados"] else "")
-        for p in pv_tcc
-    ))
-    print()
+
+def formatar_tempo(tempo_s: float) -> str:
+    """Formata o tempo em milissegundos (ms), segundos (s) ou minutos (min)."""
+    if tempo_s < 1.0:
+        return f"{tempo_s * 1000:7.2f} ms"
+    if tempo_s < 60.0:
+        return f"{tempo_s:7.2f} s "
+    return f"{tempo_s / 60.0:7.2f} min"
+
+
+def formatar_linha(m: int, k: int, n: int, v: int, turnos: int, ja: int, jb: int, prop: int, tempo_s: float, nos: int) -> str:
+    venc_str = "Alice" if v == MAX else "Bob"
+    t_str = formatar_tempo(tempo_s)
+
+    return (
+        f"{m:2d} | {k:2d} | {n:3d} | "
+        f"{venc_str:^8} | {turnos:7d} | {ja:5d} | {jb:5d} | "
+        f"{prop:10d} | {t_str:^11} | {nos:11d}"
+    )
+
+
+def resolver_passo(m: int) -> dict:
+    L = assinatura_uniforme_2pernas(m) #Gera a assinatura canônica uniforme para o tamanho m da espinha
+    cat = Caterpillar(L) #Cria o caterpillar a partir da assinatura L
+    jogo = JogoFechoConvexoP3(cat.adj, cat.rotulos) #Cria o jogo de fecho convexo P3 a partir do caterpillar
+    solver = Minimax(jogo, memoizacao=True) #Cria o solver Minimax com memoização para o jogo
+
+    v = solver.resolver() #Resolve o jogo e retorna o vencedor (MAX ou MIN)
+    pv = solver.variacao_principal() #Obtém a variação principal (sequência de jogadas) do jogo
+    ja = sum(1 for p in pv if p["jogador"] == "Alice") 
+    jb = sum(1 for p in pv if p["jogador"] == "Bob")
+    prop = cat.n - len(pv)
+
+    return {
+        "m": m,
+        "k": cat.k,
+        "n": cat.n,
+        "v": v,
+        "turnos": len(pv),
+        "ja": ja,
+        "jb": jb,
+        "prop": prop,
+        "tempo_s": solver.tempo_s,
+        "nos": solver.nos_visitados,
+        "trilha": pv,
+    }
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Expansão da espinha para caterpillars uniformes (0, 2..2, 0) com Minimax Puro."
+    )
+    parser.add_argument(
+        "--m-min",
+        type=int,
+        default=1,
+        help="Tamanho inicial da espinha interna m (padrão: 1).",
+    )
+    parser.add_argument(
+        "--m-max",
+        type=int,
+        default=100,
+        help="Limite máximo de espinha interna m (padrão: 100).",
+    )
+    parser.add_argument(
+        "--trilha",
+        action="store_true",
+        help="Exibe os lances da partida ótima sob cada tamanho testado.",
+    )
+    args = parser.parse_args()
+
+    print("=" * 87)
+    print("CATERPILLARS UNIFORMES L = (0, 2..2, 0) -- MINIMAX COM PODA ALFA-BETA (CORE)")
+    print("=" * 87)
+    print("Formato: 2 pernas em cada nó interno da espinha | Alice sempre inicia (MAX)")
+    print("Pressione [Ctrl + C] para interromper a execução a qualquer momento.")
+    print("=" * 87)
+    print(formatar_cabecalho(), flush=True)
+
+    m = args.m_min
+    try:
+        for m in range(args.m_min, args.m_max + 1):
+            r = resolver_passo(m) #Tenta achar a solução para o tamanho m da espinha
+            linha = formatar_linha(
+                r["m"], r["k"], r["n"], r["v"],
+                r["turnos"], r["ja"], r["jb"],
+                r["prop"], r["tempo_s"], r["nos"]
+            )
+            print(linha, flush=True)
+
+            if args.trilha:
+                seq = " -> ".join(
+                    f"{p['jogador'][0]}({p['jogada']})" + (f"+{p['propagados']}" if p["propagados"] else "")
+                    for p in r["trilha"]
+                )
+                print(f"   Trilha: {seq}", flush=True)
+
+    except KeyboardInterrupt:
+        print("\n" + "-" * 87)
+        print(f"[PARADA] Execução interrompida pelo usuário no tamanho m = {m}.")
+        print("-" * 87)
 
 
 if __name__ == "__main__":
-    validar_exemplos_do_tcc()
-    executar_tudo()
+    main()

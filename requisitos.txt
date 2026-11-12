@@ -1,2 +1,2 @@
-matplotlib>=3.8.0
-networkx>=3.2.0
+# Versão CORE: Não requer nenhuma biblioteca externa.
+# Utiliza exclusivamente a biblioteca padrão do Python 3 (deque, time, sys, dataclasses).
