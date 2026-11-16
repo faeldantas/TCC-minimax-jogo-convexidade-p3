@@ -97,6 +97,12 @@ def main():
     )
     # Define os parâmetros de linha de comando
     parser.add_argument(
+        "--assinatura", "-a",
+        type=str,
+        default=None,
+        help="Executa uma assinatura arbitrária específica (ex: '0,2,2,0,2,2,0' ou '0,2,0,2,0,2,0').",
+    )
+    parser.add_argument(
         "--pernas", "-p",
         type=int,
         default=2,
@@ -120,6 +126,35 @@ def main():
         help="Exibe os lances da partida ótima sob cada tamanho testado.",
     )
     args = parser.parse_args()  # Processa os argumentos passados pelo usuário
+
+    # Se o usuário passou uma assinatura específica (ex: -a "0,2,2,0,2,2,0")
+    if args.assinatura:
+        L = tuple(int(x.strip()) for x in args.assinatura.split(","))
+        cat = Caterpillar(L)
+        jogo = JogoFechoConvexoP3(cat.adj, cat.rotulos)
+        solver = Minimax(jogo, memoizacao=True)
+        v = solver.resolver()
+        pv = solver.variacao_principal()
+        ja = sum(1 for lance in pv if lance["jogador"] == "Alice")
+        jb = sum(1 for lance in pv if lance["jogador"] == "Bob")
+        prop = cat.n - len(pv)
+        m_internos = len(L) - 2
+
+        print("=" * 87)
+        print(f"CATERPILLAR ESPECÍFICO -- ASSINATURA L = {L}")
+        print("=" * 87)
+        print(f"Ordem: n = {cat.n} vértices | Espinha: k = {cat.k} nós | Alice inicia (MAX)")
+        print("=" * 87)
+        print(formatar_cabecalho(), flush=True)
+        linha = formatar_linha(m_internos, cat.k, cat.n, v, len(pv), ja, jb, prop, solver.tempo_s, solver.nos_visitados)
+        print(linha, flush=True)
+        if args.trilha:
+            seq = " -> ".join(
+                f"{p['jogador'][0]}({p['jogada']})" + (f"+{p['propagados']}" if p["propagados"] else "")
+                for p in pv
+            )
+            print(f"   Trilha: {seq}", flush=True)
+        return
 
     # Imprime informações iniciais do experimento
     print("=" * 87)
