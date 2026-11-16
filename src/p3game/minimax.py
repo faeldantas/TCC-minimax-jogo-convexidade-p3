@@ -25,7 +25,7 @@ if TEM_NUMBA:
     @njit(
         int64(
             uint64, int64, int64, int64, int64, int64, uint64,
-            int32[:], int32[:], uint64[:],
+            int32[:], int32[:], uint64[:], int32[:],
             uint64[:, :], int32[:],
             uint64[:], int8[:], uint64,
             int64[:], int64,
@@ -42,6 +42,7 @@ if TEM_NUMBA:
         offsets: np.ndarray,
         neighbors: np.ndarray,
         adj_mask: np.ndarray,
+        pred_folha: np.ndarray,
         buf_suc: np.ndarray,
         fila: np.ndarray,
         ht_keys: np.ndarray,
@@ -51,9 +52,8 @@ if TEM_NUMBA:
         usar_memo: int,
     ) -> int:
         """
-        Núcleo recursivo do Minimax com Poda Alfa-Beta e Corte de Paridade compilado via Numba.
-        Utiliza buffers pré-alocados ('buf_suc', 'fila') e tabela hash por endereçamento aberto
-        em arrays NumPy para eliminar alocações de memória durante a busca na árvore.
+        Núcleo recursivo do Minimax com Poda Alfa-Beta, Corte de Paridade e Quebra de Simetria
+        de Folhas Gêmeas compilado via Numba.
         """
         stats[0] += 1  # Incrementa contador de nós visitados
 
@@ -81,10 +81,13 @@ if TEM_NUMBA:
                 idx = (idx + uint64(1)) & ht_mask
                 probes += 1
 
-        # 2. Gera todos os estados sucessores aplicando o fecho P_3 incremental em cada vértice livre
+        # 2. Gera sucessores com quebra de simetria de folhas gêmeas + fecho P_3 incremental
         qtd = 0
         for v in range(n):
             if not ((S >> uint64(v)) & uint64(1)):
+                pf = pred_folha[v]
+                if pf != -1 and not ((S >> uint64(pf)) & uint64(1)):
+                    continue  # Só libera a folha gêmea v quando sua irmã anterior pf já estiver infectada
                 buf_suc[prof, qtd] = fecho_p3_numba(offsets, neighbors, adj_mask, S, v, fila)
                 qtd += 1
 
@@ -97,7 +100,7 @@ if TEM_NUMBA:
                 filho = buf_suc[prof, i]
                 res = minimax_ab_numba(
                     filho, -1, alfa, beta, prof + 1, n, mascara_internos,
-                    offsets, neighbors, adj_mask, buf_suc, fila,
+                    offsets, neighbors, adj_mask, pred_folha, buf_suc, fila,
                     ht_keys, ht_vals, ht_mask, stats, usar_memo,
                 )
                 if res > val:
@@ -112,7 +115,7 @@ if TEM_NUMBA:
                 filho = buf_suc[prof, i]
                 res = minimax_ab_numba(
                     filho, 1, alfa, beta, prof + 1, n, mascara_internos,
-                    offsets, neighbors, adj_mask, buf_suc, fila,
+                    offsets, neighbors, adj_mask, pred_folha, buf_suc, fila,
                     ht_keys, ht_vals, ht_mask, stats, usar_memo,
                 )
                 if res < val:
@@ -145,6 +148,7 @@ if TEM_NUMBA:
         off = np.array([0, 0], dtype=np.int32)
         nei = np.zeros(0, dtype=np.int32)
         am = np.zeros(1, dtype=np.uint64)
+        pf = np.full(1, -1, dtype=np.int32)
         bs = np.empty((2, 1), dtype=np.uint64)
         fl = np.empty(1, dtype=np.int32)
         hk = np.full(16, _VAZIO_HT, dtype=np.uint64)
@@ -152,7 +156,7 @@ if TEM_NUMBA:
         st = np.zeros(1, dtype=np.int64)
         minimax_ab_numba(
             np.uint64(0), 1, -1, 1, 0, 1, np.uint64(0),
-            off, nei, am, bs, fl, hk, hv, np.uint64(15), st, 1,
+            off, nei, am, pf, bs, fl, hk, hv, np.uint64(15), st, 1,
         )
         _NUMBA_AQUECIDO = True
 else:
@@ -188,6 +192,8 @@ class Minimax:
             n = jogo.n
             cap = 1 << min(23, max(12, n + 1))
             self._mascara_internos = np.uint64(getattr(jogo, "mascara_internos", 0))
+            pf_arr = getattr(jogo, "pred_folha_arr", None)
+            self._pred_folha = pf_arr if pf_arr is not None else np.full(n, -1, dtype=np.int32)
             self._ht_keys = np.full(cap, _VAZIO_HT, dtype=np.uint64)
             self._ht_vals = np.zeros(cap, dtype=np.int8)
             self._ht_mask = np.uint64(cap - 1)
@@ -216,6 +222,7 @@ class Minimax:
                     self.jogo.offsets,
                     self.jogo.neighbors,
                     self.jogo.adj_mask,
+                    self._pred_folha,
                     self._buf_suc,
                     self._fila,
                     self._ht_keys,
