@@ -190,7 +190,7 @@ class Minimax:
         if self._usa_numba:
             _aquecer_numba()
             n = jogo.n
-            cap = 1 << min(23, max(12, n + 1))
+            cap = 1 << min(28, max(12, n + 1))
             self._mascara_internos = np.uint64(getattr(jogo, "mascara_internos", 0))
             pf_arr = getattr(jogo, "pred_folha_arr", None)
             self._pred_folha = pf_arr if pf_arr is not None else np.full(n, -1, dtype=np.int32)
