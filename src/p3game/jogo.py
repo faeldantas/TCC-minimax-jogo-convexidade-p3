@@ -4,8 +4,10 @@ Define o estado inicial, as transições válidas por jogada e os rótulos dos v
 """
 
 from __future__ import annotations
-import numpy as np
-from .convexidade import fecho_p3  # Importa o operador de fecho convexo P3
+from .convexidade import fecho_p3, TEM_NUMBA  # Importa o operador de fecho convexo P3
+
+if TEM_NUMBA:
+    import numpy as np
 
 
 class JogoFechoConvexoP3:
@@ -25,7 +27,7 @@ class JogoFechoConvexoP3:
 
         # Pré-calcula a representação CSR (Compressed Sparse Row) + máscaras de adjacência
         # para consumo direto em código de máquina pelo Numba (suporta até n <= 63 vértices).
-        if self.n <= 63:
+        if TEM_NUMBA and self.n <= 63:
             offsets = np.zeros(self.n + 1, dtype=np.int32)
             flat: list[int] = []
             adj_mask = np.zeros(self.n, dtype=np.uint64)

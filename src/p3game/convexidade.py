@@ -6,8 +6,13 @@ incluindo a versão incremental compilada para código de máquina via Numba (@n
 
 from __future__ import annotations
 from collections import deque  # Fila de duas pontas de alta performance para a BFS
-import numpy as np
-from numba import njit, int32, int64, uint64
+
+try:
+    import numpy as np
+    from numba import njit, int32, int64, uint64
+    TEM_NUMBA = True
+except ImportError:
+    TEM_NUMBA = False
 
 
 def fecho_p3(adj: list[list[int]], S: int) -> tuple[int, list[int]]:
@@ -60,47 +65,50 @@ def fecho_p3(adj: list[list[int]], S: int) -> tuple[int, list[int]]:
     return S, propagados  # Retorna o estado fechado final e a sequência de propagações
 
 
-@njit(uint64(int32[:], int32[:], uint64[:], uint64, int64, int32[:]))
-def fecho_p3_numba(
-    offsets: np.ndarray,
-    neighbors: np.ndarray,
-    adj_mask: np.ndarray,
-    S: int,
-    v: int,
-    fila: np.ndarray,
-) -> int:
-    """
-    Versão incremental e compilada via Numba (@njit) do operador de Fecho Convexo P_3.
-    Parte do pressuposto de que S já é fechado e infecta v:
-      1. Verifica apenas os vizinhos de v e dos propagados em cascata (sem varrer o grafo).
-      2. Usa o truque bitwise (viz_inf & (viz_inf - 1)) != 0 para testar >= 2 vizinhos em O(1).
-    """
-    S = S | (uint64(1) << uint64(v))  # Infecta o vértice escolhido v
-    head = 0
-    tail = 0
+if TEM_NUMBA:
+    @njit(uint64(int32[:], int32[:], uint64[:], uint64, int64, int32[:]))
+    def fecho_p3_numba(
+        offsets: np.ndarray,
+        neighbors: np.ndarray,
+        adj_mask: np.ndarray,
+        S: int,
+        v: int,
+        fila: np.ndarray,
+    ) -> int:
+        """
+        Versão incremental e compilada via Numba (@njit) do operador de Fecho Convexo P_3.
+        Parte do pressuposto de que S já é fechado e infecta v:
+          1. Verifica apenas os vizinhos de v e dos propagados em cascata (sem varrer o grafo).
+          2. Usa o truque bitwise (viz_inf & (viz_inf - 1)) != 0 para testar >= 2 vizinhos em O(1).
+        """
+        S = S | (uint64(1) << uint64(v))  # Infecta o vértice escolhido v
+        head = 0
+        tail = 0
 
-    # Verifica apenas os vizinhos diretos de v
-    for idx in range(offsets[v], offsets[v + 1]):
-        u = neighbors[idx]
-        if not ((S >> uint64(u)) & uint64(1)):  # Se u ainda não está infectado
-            viz_inf = S & adj_mask[u]           # Máscara dos vizinhos infectados de u
-            # Expressão bitwise verdadeira se e só se u possui >= 2 vizinhos infectados
-            if (viz_inf & (viz_inf - uint64(1))) != uint64(0):
-                S = S | (uint64(1) << uint64(u))
-                fila[tail] = u
-                tail += 1
-
-    # Propaga em cascata (BFS) sobre o buffer pré-alocado 'fila'
-    while head < tail:
-        u = fila[head]
-        head += 1
-        for idx in range(offsets[u], offsets[u + 1]):
-            w = neighbors[idx]
-            if not ((S >> uint64(w)) & uint64(1)):
-                viz_inf = S & adj_mask[w]
+        # Verifica apenas os vizinhos diretos de v
+        for idx in range(offsets[v], offsets[v + 1]):
+            u = neighbors[idx]
+            if not ((S >> uint64(u)) & uint64(1)):  # Se u ainda não está infectado
+                viz_inf = S & adj_mask[u]           # Máscara dos vizinhos infectados de u
+                # Expressão bitwise verdadeira se e só se u possui >= 2 vizinhos infectados
                 if (viz_inf & (viz_inf - uint64(1))) != uint64(0):
-                    S = S | (uint64(1) << uint64(w))
-                    fila[tail] = w
+                    S = S | (uint64(1) << uint64(u))
+                    fila[tail] = u
                     tail += 1
 
-    return S
+        # Propaga em cascata (BFS) sobre o buffer pré-alocado 'fila'
+        while head < tail:
+            u = fila[head]
+            head += 1
+            for idx in range(offsets[u], offsets[u + 1]):
+                w = neighbors[idx]
+                if not ((S >> uint64(w)) & uint64(1)):
+                    viz_inf = S & adj_mask[w]
+                    if (viz_inf & (viz_inf - uint64(1))) != uint64(0):
+                        S = S | (uint64(1) << uint64(w))
+                        fila[tail] = w
+                        tail += 1
+
+        return S
+else:
+    fecho_p3_numba = None
