@@ -158,7 +158,7 @@ def main():
 
     # Imprime informações iniciais do experimento
     print("=" * 87)
-    print(f"CATERPILLARS REGULARES C(m, {args.pernas}) -- BUSCA DE LIMITE DA SOLUÇÃO ÓTIMA")
+    print(f"CATERPILLARS REGULARES C(m, {args.pernas}) -- PODA ALFA-BETA + NUMBA JIT")
     print("=" * 87)
     print(f"Formato: {args.pernas} perna(s) em cada nó interno da espinha | Alice sempre inicia (MAX)")
     print("A busca expandirá a espinha continuamente até encontrar o limite computacional.")

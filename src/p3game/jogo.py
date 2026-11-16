@@ -4,6 +4,7 @@ Define o estado inicial, as transições válidas por jogada e os rótulos dos v
 """
 
 from __future__ import annotations
+import numpy as np
 from .convexidade import fecho_p3  # Importa o operador de fecho convexo P3
 
 
@@ -17,10 +18,31 @@ class JogoFechoConvexoP3:
     """
 
     def __init__(self, adj: list[list[int]], rotulos: list[str]):
-        """Inicializa o jogo com a lista de adjacência do grafo e os rótulos de cada vértice."""
+        """Inicializa o jogo com a lista de adjacência do grafo e suas estruturas NumPy (CSR + bitmask)."""
         self.adj = adj          # Lista de adjacência: adj[i] contém os vizinhos do vértice i
         self.rotulos = rotulos  # Rótulos legíveis dos vértices (ex: "v1", "v2", ...)
         self.n = len(adj)       # Número total de vértices no grafo
+
+        # Pré-calcula a representação CSR (Compressed Sparse Row) + máscaras de adjacência
+        # para consumo direto em código de máquina pelo Numba (suporta até n <= 63 vértices).
+        if self.n <= 63:
+            offsets = np.zeros(self.n + 1, dtype=np.int32)
+            flat: list[int] = []
+            adj_mask = np.zeros(self.n, dtype=np.uint64)
+            for i, viz in enumerate(adj):
+                offsets[i + 1] = offsets[i] + len(viz)
+                mascara = 0
+                for w in viz:
+                    flat.append(w)
+                    mascara |= (1 << w)
+                adj_mask[i] = np.uint64(mascara)
+            self.offsets = offsets
+            self.neighbors = np.array(flat, dtype=np.int32)
+            self.adj_mask = adj_mask
+        else:
+            self.offsets = None
+            self.neighbors = None
+            self.adj_mask = None
 
     def estado_inicial(self) -> int:
         """Retorna o estado inicial do jogo: máscara 0 (conjunto vazio)."""

@@ -1,2 +1,3 @@
-# Versão CORE: Não requer nenhuma biblioteca externa.
-# Utiliza exclusivamente a biblioteca padrão do Python 3 (deque, time, sys, dataclasses).
+# Dependências da branch poda-alfa-beta-numba:
+numpy>=1.22
+numba>=0.60

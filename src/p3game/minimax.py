@@ -1,16 +1,144 @@
 """
-Camada 4 -- Algoritmo Minimax com Poda Alfa-Beta (CORE).
-Implementa o solucionador exaustivo com poda alfa-beta por curto-circuito binário e memoização.
+Camada 4 -- Algoritmo Minimax com Poda Alfa-Beta e Aceleração JIT via Numba (CORE).
+Implementa o solucionador exaustivo com poda alfa-beta por curto-circuito binário,
+tabela de transposição por endereçamento aberto e compilação nativa LLVM (@njit).
 """
 
 from __future__ import annotations
 import sys   # Módulo do sistema para alterar o limite de profundidade de recursão
 import time  # Módulo para cronometragem de alta resolução (perf_counter)
+import numpy as np
+from numba import njit, int8, int32, int64, uint64
+from .convexidade import fecho_p3_numba
 
 # Constantes dos jogadores:
 # MAX (+1) = Alice (jogadora inicial que tenta maximizar para +1)
 # MIN (-1) = Bob   (segundo jogador que tenta minimizar para -1)
 MAX, MIN = +1, -1
+
+_VAZIO_HT = np.uint64(0xFFFFFFFFFFFFFFFF)
+_NUMBA_AQUECIDO = False
+
+
+@njit(
+    int64(
+        uint64, int64, int64, int64, int64, int64,
+        int32[:], int32[:], uint64[:],
+        uint64[:, :], int32[:],
+        uint64[:], int8[:], uint64,
+        int64[:], int64,
+    )
+)
+def minimax_ab_numba(
+    S: int,
+    jogador: int,
+    alfa: int,
+    beta: int,
+    prof: int,
+    n: int,
+    offsets: np.ndarray,
+    neighbors: np.ndarray,
+    adj_mask: np.ndarray,
+    buf_suc: np.ndarray,
+    fila: np.ndarray,
+    ht_keys: np.ndarray,
+    ht_vals: np.ndarray,
+    ht_mask: int,
+    stats: np.ndarray,
+    usar_memo: int,
+) -> int:
+    """
+    Núcleo recursivo do Minimax com Poda Alfa-Beta compilado em código de máquina via Numba.
+    Utiliza buffers pré-alocados ('buf_suc', 'fila') e tabela hash por endereçamento aberto
+    em arrays NumPy para eliminar alocações de memória durante a busca na árvore.
+    """
+    stats[0] += 1  # Incrementa contador de nós visitados
+
+    # 1. Consulta à Tabela de Transposição (endereçamento aberto com hash multiplicativo de Fibonacci)
+    if usar_memo:
+        idx = (S * uint64(0x9E3779B97F4A7C15)) & ht_mask
+        probes = 0
+        while probes < 64:
+            k = ht_keys[idx]
+            if k == S:
+                return int64(ht_vals[idx]) * jogador
+            if k == uint64(0xFFFFFFFFFFFFFFFF):
+                break
+            idx = (idx + uint64(1)) & ht_mask
+            probes += 1
+
+    # 2. Gera todos os estados sucessores aplicando o fecho P_3 incremental em cada vértice livre
+    qtd = 0
+    for v in range(n):
+        if not ((S >> uint64(v)) & uint64(1)):
+            buf_suc[prof, qtd] = fecho_p3_numba(offsets, neighbors, adj_mask, S, v, fila)
+            qtd += 1
+
+    # 3. Avaliação Terminal ou Recursão Minimax com Poda Alfa-Beta
+    if qtd == 0:
+        val = -jogador  # Sem lances legais pela Convenção Normal: quem está na vez perde
+    elif jogador == 1:
+        val = -1
+        for i in range(qtd):
+            filho = buf_suc[prof, i]
+            res = minimax_ab_numba(
+                filho, -1, alfa, beta, prof + 1, n,
+                offsets, neighbors, adj_mask, buf_suc, fila,
+                ht_keys, ht_vals, ht_mask, stats, usar_memo,
+            )
+            if res > val:
+                val = res
+            if val > alfa:
+                alfa = val
+            if alfa >= beta:
+                break  # Poda Beta: MAX já garantiu vitória (+1)
+    else:
+        val = 1
+        for i in range(qtd):
+            filho = buf_suc[prof, i]
+            res = minimax_ab_numba(
+                filho, 1, alfa, beta, prof + 1, n,
+                offsets, neighbors, adj_mask, buf_suc, fila,
+                ht_keys, ht_vals, ht_mask, stats, usar_memo,
+            )
+            if res < val:
+                val = res
+            if val < beta:
+                beta = val
+            if beta <= alfa:
+                break  # Poda Alfa: MIN já garantiu vitória (-1)
+
+    # 4. Armazenamento na Tabela de Transposição
+    if usar_memo:
+        idx = (S * uint64(0x9E3779B97F4A7C15)) & ht_mask
+        probes = 0
+        while probes < 64:
+            k = ht_keys[idx]
+            if k == S or k == uint64(0xFFFFFFFFFFFFFFFF):
+                ht_keys[idx] = S
+                ht_vals[idx] = int8(val * jogador)
+                break
+            idx = (idx + uint64(1)) & ht_mask
+            probes += 1
+
+    return val
+
+
+def _aquecer_numba() -> None:
+    """Executa uma micro-chamada inicial para garantir o carregamento/compilação JIT fora da medição."""
+    global _NUMBA_AQUECIDO
+    if _NUMBA_AQUECIDO:
+        return
+    off = np.array([0, 0], dtype=np.int32)
+    nei = np.zeros(0, dtype=np.int32)
+    am = np.zeros(1, dtype=np.uint64)
+    bs = np.empty((2, 1), dtype=np.uint64)
+    fl = np.empty(1, dtype=np.int32)
+    hk = np.full(16, _VAZIO_HT, dtype=np.uint64)
+    hv = np.zeros(16, dtype=np.int8)
+    st = np.zeros(1, dtype=np.int64)
+    minimax_ab_numba(np.uint64(0), 1, -1, 1, 0, 1, off, nei, am, bs, fl, hk, hv, np.uint64(15), st, 1)
+    _NUMBA_AQUECIDO = True
 
 
 class Minimax:
@@ -19,18 +147,31 @@ class Minimax:
     - Alice = MAX (+1)
     - Bob = MIN (-1)
     - Com corte alfa-beta: interrompe a busca no nó assim que alfa >= beta.
-    - Memoização: tabela de transposição para não recalcular estados isomórficos já visitados.
+    - Memoização: tabela de transposição para não recalcular estados já visitados.
+    - Aceleração Numba (@njit): executa o núcleo de busca em código nativo LLVM quando n <= 63.
     """
 
     def __init__(self, jogo, memoizacao: bool = True):
         """Inicializa o resolvedor Minimax associado a uma instância do jogo."""
         self.jogo = jogo                              # Referência à camada de regras do jogo
         self.memoizacao = memoizacao                  # Booleano que ativa ou desativa o cache de transposição
-        self.tabela: dict[int, int] = {}              # Dicionário de memoização: mapeia estado S para seu valor normalizado
+        self.tabela: dict[int, int] = {}              # Dicionário Python (fallback para n > 63 ou jogos customizados)
         self.nos_visitados = 0                        # Contador cumulativo de nós visitados na árvore de busca
         self.tempo_s = 0.0                            # Tempo total consumido pela resolução em segundos
-        # Aumenta o limite de recursão do Python para suportar árvores de busca profundas (m elevado)
         sys.setrecursionlimit(max(10_000, sys.getrecursionlimit()))
+
+        # Verifica se o jogo fornece representação NumPy (CSR + bitmask) e cabe em uint64 (n <= 63)
+        self._usa_numba = getattr(jogo, "adj_mask", None) is not None and jogo.n <= 63
+        if self._usa_numba:
+            _aquecer_numba()
+            n = jogo.n
+            cap = 1 << min(23, max(12, n + 1))
+            self._ht_keys = np.full(cap, _VAZIO_HT, dtype=np.uint64)
+            self._ht_vals = np.zeros(cap, dtype=np.int8)
+            self._ht_mask = np.uint64(cap - 1)
+            self._buf_suc = np.empty((n + 1, n), dtype=np.uint64)
+            self._fila = np.empty(n, dtype=np.int32)
+            self._stats = np.zeros(1, dtype=np.int64)
 
     def valor(self, S: int, jogador: int, alfa: int = MIN, beta: int = MAX) -> int:
         """
@@ -39,54 +180,68 @@ class Minimax:
           +1: Alice possui estratégia vencedora forçada a partir de S.
           -1: Bob possui estratégia vencedora forçada a partir de S.
         """
-        self.nos_visitados += 1  # Incrementa o número de chamadas da função de avaliação
+        if self._usa_numba:
+            self._stats[0] = 0
+            res = int(
+                minimax_ab_numba(
+                    np.uint64(S),
+                    jogador,
+                    alfa,
+                    beta,
+                    0,
+                    self.jogo.n,
+                    self.jogo.offsets,
+                    self.jogo.neighbors,
+                    self.jogo.adj_mask,
+                    self._buf_suc,
+                    self._fila,
+                    self._ht_keys,
+                    self._ht_vals,
+                    self._ht_mask,
+                    self._stats,
+                    1 if self.memoizacao else 0,
+                )
+            )
+            self.nos_visitados += int(self._stats[0])
+            return res
 
-        # Consulta a Tabela de Transposição: se o estado já foi resolvido, retorna o valor ajustado
+        self.nos_visitados += 1
+
         if self.memoizacao and S in self.tabela:
-            # Multiplica por 'jogador' para converter a perspectiva relativa (quem joga) para absoluta (+1/-1)
             return self.tabela[S] * jogador
 
-        # Obtém todos os movimentos válidos a partir do estado atual S
         sucessores = self.jogo.jogadas(S)
-
         if not sucessores:
-            # Caso Base Terminal: Não há mais lances legais (todo o grafo foi infectado).
-            # Pela Convenção Normal, quem não tem jogada perde; logo, o jogador anterior venceu:
-            v = -jogador  # Se era vez de Alice (+1), Alice perde (-1); se era Bob (-1), Bob perde (+1)
+            v = -jogador
         elif jogador == MAX:
-            # Turno de Alice (MAX): quer o maior valor possível (+1)
-            v = MIN  # Inicializa com o pior valor para MAX (-1)
-            for _, filho in sucessores:  # Avalia cada estado sucessor
-                v = max(v, self.valor(filho, MIN, alfa, beta))  # Chama recursivamente para a vez de Bob (MIN)
-                alfa = max(alfa, v)                             # Atualiza a melhor garantia de Alice (alfa)
+            v = MIN
+            for _, filho in sucessores:
+                v = max(v, self.valor(filho, MIN, alfa, beta))
+                alfa = max(alfa, v)
                 if alfa >= beta:
-                    break  # Poda Beta: MAX já garantiu vitória (+1), ramos irmãos são cortados
+                    break
         else:
-            # Turno de Bob (MIN): quer o menor valor possível (-1)
-            v = MAX  # Inicializa com o pior valor para MIN (+1)
-            for _, filho in sucessores:  # Avalia cada estado sucessor
-                v = min(v, self.valor(filho, MAX, alfa, beta))  # Chama recursivamente para a vez de Alice (MAX)
-                beta = min(beta, v)                             # Atualiza a melhor garantia de Bob (beta)
+            v = MAX
+            for _, filho in sucessores:
+                v = min(v, self.valor(filho, MAX, alfa, beta))
+                beta = min(beta, v)
                 if beta <= alfa:
-                    break  # Poda Alfa: MIN já garantiu vitória (-1), ramos irmãos são cortados
+                    break
 
-        # Armazena o resultado na tabela de memoização (normalizado do ponto de vista do jogador da vez)
         if self.memoizacao:
             self.tabela[S] = v * jogador
 
-        return v  # Retorna o valor minimax do estado
+        return v
 
     def resolver(self) -> int:
         """
         Dispara a resolução do jogo a partir do estado inicial (S = 0), com Alice (MAX) iniciando.
         Cronometra o tempo de execução e armazena em self.tempo_s.
         """
-        t0 = time.perf_counter()  # Marca o timestamp inicial com precisão de nanossegundos
+        t0 = time.perf_counter()
         try:
-            # Inicia a busca a partir do estado inicial vazio S = 0 com a janela clássica [-1, +1]
             return self.valor(self.jogo.estado_inicial(), MAX, MIN, MAX)
         finally:
-            # Garante que o tempo decorrido seja gravado mesmo se ocorrer interrupção (Ctrl + C)
             self.tempo_s = time.perf_counter() - t0
 
     def variacao_principal(self) -> list[dict]: 

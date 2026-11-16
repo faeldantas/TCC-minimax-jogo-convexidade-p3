@@ -1,10 +1,13 @@
 """
-Camada 2 -- Operador de Fecho Convexo P_3 em bitmask (CORE).
-Implementa o cálculo exato do fecho P3 por propagação em largura (BFS linear) em O(|V| + |E|).
+Camada 2 -- Operador de Fecho Convexo P_3 em bitmask (CORE + Numba JIT).
+Implementa o cálculo exato do fecho P3 por propagação em largura (BFS linear) em O(|V| + |E|),
+incluindo a versão incremental compilada para código de máquina via Numba (@njit).
 """
 
 from __future__ import annotations
 from collections import deque  # Fila de duas pontas de alta performance para a BFS
+import numpy as np
+from numba import njit, int32, int64, uint64
 
 
 def fecho_p3(adj: list[list[int]], S: int) -> tuple[int, list[int]]:
@@ -55,3 +58,49 @@ def fecho_p3(adj: list[list[int]], S: int) -> tuple[int, list[int]]:
                     enfileirado[w] = True                # Marca w para não ser re-adicionado
 
     return S, propagados  # Retorna o estado fechado final e a sequência de propagações
+
+
+@njit(uint64(int32[:], int32[:], uint64[:], uint64, int64, int32[:]))
+def fecho_p3_numba(
+    offsets: np.ndarray,
+    neighbors: np.ndarray,
+    adj_mask: np.ndarray,
+    S: int,
+    v: int,
+    fila: np.ndarray,
+) -> int:
+    """
+    Versão incremental e compilada via Numba (@njit) do operador de Fecho Convexo P_3.
+    Parte do pressuposto de que S já é fechado e infecta v:
+      1. Verifica apenas os vizinhos de v e dos propagados em cascata (sem varrer o grafo).
+      2. Usa o truque bitwise (viz_inf & (viz_inf - 1)) != 0 para testar >= 2 vizinhos em O(1).
+    """
+    S = S | (uint64(1) << uint64(v))  # Infecta o vértice escolhido v
+    head = 0
+    tail = 0
+
+    # Verifica apenas os vizinhos diretos de v
+    for idx in range(offsets[v], offsets[v + 1]):
+        u = neighbors[idx]
+        if not ((S >> uint64(u)) & uint64(1)):  # Se u ainda não está infectado
+            viz_inf = S & adj_mask[u]           # Máscara dos vizinhos infectados de u
+            # Expressão bitwise verdadeira se e só se u possui >= 2 vizinhos infectados
+            if (viz_inf & (viz_inf - uint64(1))) != uint64(0):
+                S = S | (uint64(1) << uint64(u))
+                fila[tail] = u
+                tail += 1
+
+    # Propaga em cascata (BFS) sobre o buffer pré-alocado 'fila'
+    while head < tail:
+        u = fila[head]
+        head += 1
+        for idx in range(offsets[u], offsets[u + 1]):
+            w = neighbors[idx]
+            if not ((S >> uint64(w)) & uint64(1)):
+                viz_inf = S & adj_mask[w]
+                if (viz_inf & (viz_inf - uint64(1))) != uint64(0):
+                    S = S | (uint64(1) << uint64(w))
+                    fila[tail] = w
+                    tail += 1
+
+    return S
