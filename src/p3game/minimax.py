@@ -24,7 +24,7 @@ if TEM_NUMBA:
 
     @njit(
         int64(
-            uint64, int64, int64, int64, int64, int64,
+            uint64, int64, int64, int64, int64, int64, uint64,
             int32[:], int32[:], uint64[:],
             uint64[:, :], int32[:],
             uint64[:], int8[:], uint64,
@@ -38,6 +38,7 @@ if TEM_NUMBA:
         beta: int,
         prof: int,
         n: int,
+        mascara_internos: int,
         offsets: np.ndarray,
         neighbors: np.ndarray,
         adj_mask: np.ndarray,
@@ -50,11 +51,22 @@ if TEM_NUMBA:
         usar_memo: int,
     ) -> int:
         """
-        Núcleo recursivo do Minimax com Poda Alfa-Beta compilado em código de máquina via Numba.
+        Núcleo recursivo do Minimax com Poda Alfa-Beta e Corte de Paridade compilado via Numba.
         Utiliza buffers pré-alocados ('buf_suc', 'fila') e tabela hash por endereçamento aberto
         em arrays NumPy para eliminar alocações de memória durante a busca na árvore.
         """
         stats[0] += 1  # Incrementa contador de nós visitados
+
+        # 0. Corte de Paridade em O(1): quando todos os nós de grau >= 2 já estão infectados,
+        # nenhuma propagação P_3 adicional ocorrerá; os nós restantes são apenas folhas (grau <= 1).
+        if (S & mascara_internos) == mascara_internos:
+            infectados = 0
+            x = S
+            while x:
+                x &= x - uint64(1)  # Truque de Kernighan: apaga o bit 1 menos significativo por iteração
+                infectados += 1
+            restantes = n - infectados
+            return jogador if (restantes & 1) else -jogador
 
         # 1. Consulta à Tabela de Transposição (endereçamento aberto com hash multiplicativo de Fibonacci)
         if usar_memo:
@@ -84,7 +96,7 @@ if TEM_NUMBA:
             for i in range(qtd):
                 filho = buf_suc[prof, i]
                 res = minimax_ab_numba(
-                    filho, -1, alfa, beta, prof + 1, n,
+                    filho, -1, alfa, beta, prof + 1, n, mascara_internos,
                     offsets, neighbors, adj_mask, buf_suc, fila,
                     ht_keys, ht_vals, ht_mask, stats, usar_memo,
                 )
@@ -99,7 +111,7 @@ if TEM_NUMBA:
             for i in range(qtd):
                 filho = buf_suc[prof, i]
                 res = minimax_ab_numba(
-                    filho, 1, alfa, beta, prof + 1, n,
+                    filho, 1, alfa, beta, prof + 1, n, mascara_internos,
                     offsets, neighbors, adj_mask, buf_suc, fila,
                     ht_keys, ht_vals, ht_mask, stats, usar_memo,
                 )
@@ -138,7 +150,10 @@ if TEM_NUMBA:
         hk = np.full(16, _VAZIO_HT, dtype=np.uint64)
         hv = np.zeros(16, dtype=np.int8)
         st = np.zeros(1, dtype=np.int64)
-        minimax_ab_numba(np.uint64(0), 1, -1, 1, 0, 1, off, nei, am, bs, fl, hk, hv, np.uint64(15), st, 1)
+        minimax_ab_numba(
+            np.uint64(0), 1, -1, 1, 0, 1, np.uint64(0),
+            off, nei, am, bs, fl, hk, hv, np.uint64(15), st, 1,
+        )
         _NUMBA_AQUECIDO = True
 else:
     minimax_ab_numba = None
@@ -172,6 +187,7 @@ class Minimax:
             _aquecer_numba()
             n = jogo.n
             cap = 1 << min(23, max(12, n + 1))
+            self._mascara_internos = np.uint64(getattr(jogo, "mascara_internos", 0))
             self._ht_keys = np.full(cap, _VAZIO_HT, dtype=np.uint64)
             self._ht_vals = np.zeros(cap, dtype=np.int8)
             self._ht_mask = np.uint64(cap - 1)
@@ -196,6 +212,7 @@ class Minimax:
                     beta,
                     0,
                     self.jogo.n,
+                    self._mascara_internos,
                     self.jogo.offsets,
                     self.jogo.neighbors,
                     self.jogo.adj_mask,
@@ -212,6 +229,12 @@ class Minimax:
             return res
 
         self.nos_visitados += 1
+
+        # Corte de paridade também no fallback em Python puro
+        mi = getattr(self.jogo, "mascara_internos", None)
+        if mi is not None and (S & mi) == mi:
+            restantes = self.jogo.n - S.bit_count()
+            return jogador if (restantes & 1) else -jogador
 
         if self.memoizacao and S in self.tabela:
             return self.tabela[S] * jogador

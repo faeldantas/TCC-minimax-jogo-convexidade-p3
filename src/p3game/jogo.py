@@ -24,6 +24,8 @@ class JogoFechoConvexoP3:
         self.adj = adj          # Lista de adjacência: adj[i] contém os vizinhos do vértice i
         self.rotulos = rotulos  # Rótulos legíveis dos vértices (ex: "v1", "v2", ...)
         self.n = len(adj)       # Número total de vértices no grafo
+        # Máscara com todos os vértices de grau >= 2 (únicos capazes de propagar no fecho P3)
+        self.mascara_internos = sum(1 << v for v, viz in enumerate(adj) if len(viz) >= 2)
 
         # Pré-calcula a representação CSR (Compressed Sparse Row) + máscaras de adjacência
         # para consumo direto em código de máquina pelo Numba (suporta até n <= 63 vértices).
