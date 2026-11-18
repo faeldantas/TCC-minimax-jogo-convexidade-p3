@@ -18,34 +18,17 @@ from .convexidade import fecho_p3
 
 
 def calcular_layout(cat: Caterpillar) -> dict[int, tuple[float, float]]:
-    """Calcula as coordenadas 2D (x, y) do caterpillar (espinha no centro, pernas acima/abaixo)."""
+    """Calcula as coordenadas 2D (x, y) do caterpillar: espinha em y=0 e pernas em y=±1.2."""
     pos: dict[int, tuple[float, float]] = {}
-    k = cat.k
-    espacamento_x = 1.8
+    espacamento = 1.8
 
-    # 1. Espinha em y = 0
-    for i in range(k):
-        pos[i] = (i * espacamento_x, 0.0)
-
-    # 2. Pernas distribuídas por nó pai
-    for i in range(k):
-        pernas = [u for u in cat.adj[i] if u >= k]
-        qtd = len(pernas)
-        if qtd == 0:
-            continue
-        px, _ = pos[i]
-
-        if qtd == 1:
-            pos[pernas[0]] = (px, 1.2)
-        elif qtd == 2:
-            pos[pernas[0]] = (px, 1.2)
-            pos[pernas[1]] = (px, -1.2)
-        else:
-            meio = math.ceil(qtd / 2)
-            for idx, p in enumerate(pernas[:meio]):
-                pos[p] = (px - 0.3 + idx * 0.6, 1.2)
-            for idx, p in enumerate(pernas[meio:]):
-                pos[p] = (px - 0.3 + idx * 0.6, -1.2)
+    for i in range(cat.k):
+        pos[i] = (i * espacamento, 0.0)  # Nós da espinha no centro
+        pernas = [u for u in cat.adj[i] if u >= cat.k]
+        for j, p in enumerate(pernas):
+            dy = 1.2 if j % 2 == 0 else -1.2
+            dx = (j // 2) * 0.4
+            pos[p] = (i * espacamento + dx, dy)
 
     return pos
 
@@ -59,7 +42,7 @@ def jogar_caterpillar_matplotlib(assinatura: Assinatura = (0, 2, 2, 0)) -> None:
 
     # Cores
     COR_LIVRE = "#F8FAFC"
-    COR_ALICE = "#EF4444"      # Vermelho (Humano)
+    COR_ALICE = "#EF4444"      # Vermelho (Você)
     COR_BOB = "#0EA5E9"        # Azul (IA)
     COR_PROPAGADO = "#F59E0B"  # Dourado (Fecho P3)
 
@@ -74,6 +57,14 @@ def jogar_caterpillar_matplotlib(assinatura: Assinatura = (0, 2, 2, 0)) -> None:
 
     fig, ax = plt.subplots(figsize=(10, 5))
     fig.canvas.manager.set_window_title("Jogo da Convexidade P3: Você (Alice) vs IA (Bob)")
+
+    def aplicar_lance(v: int, jogador: str) -> bool:
+        """Executa a infecção de um vértice, calcula o fecho P3 e retorna se o jogo acabou."""
+        novo_S, props = fecho_p3(cat.adj, estado["S"] | (1 << v))
+        estado["S"] = novo_S
+        (estado["jogadas_alice"] if jogador == "Alice" else estado["jogadas_bob"]).add(v)
+        estado["propagados"].update(props)
+        return estado["S"] == (1 << cat.n) - 1
 
     def redesenhar(mensagem: str = "Sua vez (Alice)! Clique em um nó livre."):
         ax.clear()
@@ -100,21 +91,13 @@ def jogar_caterpillar_matplotlib(assinatura: Assinatura = (0, 2, 2, 0)) -> None:
             inf = (S >> v) & 1
 
             if not inf:
-                cor_fill = COR_LIVRE
-                cor_borda = "#64748B"
-                cor_txt = "#1E293B"
+                cor_fill, cor_borda, cor_txt = COR_LIVRE, "#64748B", "#1E293B"
             elif v in estado["jogadas_alice"]:
-                cor_fill = COR_ALICE
-                cor_borda = "#7F1D1D"
-                cor_txt = "#FFFFFF"
+                cor_fill, cor_borda, cor_txt = COR_ALICE, "#7F1D1D", "#FFFFFF"
             elif v in estado["jogadas_bob"]:
-                cor_fill = COR_BOB
-                cor_borda = "#0C4A6E"
-                cor_txt = "#FFFFFF"
+                cor_fill, cor_borda, cor_txt = COR_BOB, "#0C4A6E", "#FFFFFF"
             else:
-                cor_fill = COR_PROPAGADO
-                cor_borda = "#78350F"
-                cor_txt = "#FFFFFF"
+                cor_fill, cor_borda, cor_txt = COR_PROPAGADO, "#78350F", "#FFFFFF"
 
             circulo = plt.Circle(
                 (x, y), 0.26,
@@ -139,7 +122,7 @@ def jogar_caterpillar_matplotlib(assinatura: Assinatura = (0, 2, 2, 0)) -> None:
             fontsize=12, fontweight="bold", pad=12, color="#0F172A"
         )
 
-        # 4. Legenda simples
+        # 4. Legenda
         patches = [
             mpatches.Patch(facecolor=COR_LIVRE, edgecolor="#64748B", label="Livre"),
             mpatches.Patch(facecolor=COR_ALICE, label="Você (Alice)"),
@@ -169,30 +152,19 @@ def jogar_caterpillar_matplotlib(assinatura: Assinatura = (0, 2, 2, 0)) -> None:
             return
 
         # 2. Turno de Alice (Você)
-        novo_S, props_alice = fecho_p3(cat.adj, estado["S"] | (1 << clicado))
-        estado["S"] = novo_S
-        estado["jogadas_alice"].add(clicado)
-        estado["propagados"].update(props_alice)
-
-        if estado["S"] == (1 << cat.n) - 1:
+        if aplicar_lance(clicado, "Alice"):
             estado["fim"] = True
             redesenhar(f"🏆 FIM DE JOGO: Você jogou em {cat.rotulos[clicado]} e VENCEU!")
             return
 
         # 3. Turno de Bob (IA Minimax)
         jogadas_ia = jogo.jogadas(estado["S"])
-        # IA escolhe o lance que leva à vitória dela (Bob = MIN)
         lance_ia = next(
             (v for v, prox in jogadas_ia if solver.valor(prox, MAX) == MIN),
             jogadas_ia[0][0]
         )
 
-        novo_S_ia, props_ia = fecho_p3(cat.adj, estado["S"] | (1 << lance_ia))
-        estado["S"] = novo_S_ia
-        estado["jogadas_bob"].add(lance_ia)
-        estado["propagados"].update(props_ia)
-
-        if estado["S"] == (1 << cat.n) - 1:
+        if aplicar_lance(lance_ia, "Bob"):
             estado["fim"] = True
             redesenhar(f"🤖 FIM DE JOGO: A IA jogou em {cat.rotulos[lance_ia]} e VENCEU!")
             return
