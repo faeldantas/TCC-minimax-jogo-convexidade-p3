@@ -15,7 +15,7 @@ import sys       # Módulo para manipulação de variáveis do interpretador Pyt
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 # Importa as classes e constantes fundamentais do pacote p3game
-from p3game import Caterpillar, JogoFechoConvexoP3, Minimax, MAX
+from p3game import Caterpillar, JogoFechoConvexoP3, Minimax, MAX, jogar_caterpillar_matplotlib
 
 
 def assinatura_uniforme(m: int, p: int = 2) -> tuple[int, ...]:
@@ -97,6 +97,18 @@ def main():
     )
     # Define os parâmetros de linha de comando
     parser.add_argument(
+        "--jogar",
+        action="store_true",
+        help="Inicia a partida gráfica interativa no Matplotlib contra a IA Minimax.",
+    )
+    parser.add_argument(
+        "--lado",
+        type=str,
+        choices=["alice", "bob"],
+        default="alice",
+        help="Escolha seu lado para jogar: 'alice' (inicia, Vermelho) ou 'bob' (2º lance, Azul). Padrão: 'alice'",
+    )
+    parser.add_argument(
         "--assinatura", "-a",
         type=str,
         default=None,
@@ -126,6 +138,31 @@ def main():
         help="Exibe os lances da partida ótima sob cada tamanho testado.",
     )
     args = parser.parse_args()  # Processa os argumentos passados pelo usuário
+
+    # Se a flag --jogar foi passada, abre a interface gráfica interativa do Matplotlib
+    if args.jogar:
+        if args.assinatura:
+            L = tuple(int(x.strip()) for x in args.assinatura.split(","))
+        else:
+            # Por padrão utiliza m=2 (L = (0, 2, 2, 0)) ou o m_min informado
+            m_usado = args.m_min if args.m_min > 1 else 2
+            L = assinatura_uniforme(m_usado, args.pernas)
+
+        humano_alice = (args.lado.lower() == "alice")
+        print("=" * 87)
+        print("JOGO DA CONVEXIDADE P_3 -- INTERFACE INTERATIVA MATPLOTLIB")
+        print("=" * 87)
+        print(f"Grafo: Assinatura L = {L} | Total de vértices: {len(L) + sum(L)}")
+        print(f"Você joga como: {'Alice (1º a jogar, Vermelho)' if humano_alice else 'Bob (2º a jogar, Azul)'}")
+        print("Atalhos na janela:")
+        print("  - Clique com o botão esquerdo em qualquer nó livre para jogar")
+        print("  - Pressione [R] para reiniciar a partida")
+        print("  - Pressione [Z] para desfazer o último lance")
+        print("  - Pressione [D] para receber uma dica da IA")
+        print("=" * 87)
+        print("Abrindo janela gráfica do Matplotlib...")
+        jogar_caterpillar_matplotlib(L, humano_eh_alice=humano_alice)
+        return
 
     # Se o usuário passou uma assinatura específica (ex: -a "0,2,2,0,2,2,0")
     if args.assinatura:

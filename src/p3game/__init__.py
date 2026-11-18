@@ -6,3 +6,4 @@ from .grafos import Caterpillar
 from .convexidade import fecho_p3
 from .jogo import JogoFechoConvexoP3
 from .minimax import Minimax, MAX, MIN
+from .jogar_matplotlib import jogar_caterpillar_matplotlib

@@ -1,2 +1,2 @@
-# Versão CORE: Não requer nenhuma biblioteca externa.
-# Utiliza exclusivamente a biblioteca padrão do Python 3 (deque, time, sys, dataclasses).
+# Dependências para a interface gráfica interativa com Matplotlib:
+matplotlib>=3.5.0
